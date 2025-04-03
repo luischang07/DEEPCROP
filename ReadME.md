@@ -8,7 +8,7 @@ A Laravel-based backend with a React frontend using TypeScript.
 - Composer
 - Node.js >= 16.x
 - npm or yarn
-- MySQL or any supported database
+- MongoDB
 
 ## Contributing
 

@@ -101,9 +101,10 @@ class PlanetService
      */
     private function loadApiKeyFromEnv(): void
     {
-        $dotenv = \Dotenv\Dotenv::createImmutable(app()->environmentPath());
-        $dotenv->load();
-        $this->apiKey = $_ENV['PLANET_API_KEY'] ?? null;
+        $this->apiKey = config('services.planet.api_key') ?? null;
+        if (empty($this->apiKey)) {
+            throw new RuntimeException('Planet API key is not configured in .env file');
+        }
     }
 
     /**

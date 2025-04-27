@@ -34,5 +34,9 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    
+    'planet' => [
+        'api_key' => env('PLANET_API_KEY'),
+    ],
 
 ];

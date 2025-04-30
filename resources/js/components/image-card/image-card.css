@@ -1,0 +1,48 @@
+.image-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background-color: #629eff4a;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.image-info {
+    padding-top: 10px;
+    color: #2d4c84;
+    width: 75%;
+    font-weight: bold;
+}
+
+.thumbnail {
+    height: 100%;
+    width: 25%;
+    margin-right: 15px;
+}
+
+.image-card-buttons {
+    display: flex;
+    flex-direction: row;
+    justify-content: right;
+    width: 100%;
+}
+
+.image-card-buttons img {
+    width: 20px;
+    height: 20px;
+}
+
+.image-card button {
+    border: none;
+    padding: 10px;
+    cursor: pointer;
+    transition:
+        transform 0.1s ease,
+        background-color 0.2s ease;
+}
+
+button:hover {
+    background-color: #5069d867;
+    transform: scale(1.05);
+}

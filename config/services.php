@@ -39,4 +39,9 @@ return [
         'api_key' => env('PLANET_API_KEY'),
     ],
 
+    'sentinelhub' => [
+        'client_id' => env('SENTINELHUB_CLIENT_ID'),
+        'client_secret' => env('SENTINELHUB_CLIENT_SECRET'),
+],
+
 ];

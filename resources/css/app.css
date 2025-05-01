@@ -156,4 +156,10 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    #app {
+        @apply h-screen w-screen;
+        overflow: hidden;
+        display: flex;
+    }
 }

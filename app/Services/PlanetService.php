@@ -77,21 +77,21 @@ class PlanetService
      * @return array miniatura de la imagen
      * @throws Exception Si la solicitud falla
      */
-    public function getThumbnail(string $imageId): array
+    public function getThumbnail(string $imageId, int $width = 60): array
     {
-        $endpoint = "https://tiles.planet.com/data/v1/item-types/PSScene/items/{$imageId}/thumb";
-        $response = Http::withBasicAuth($this->apiKey, '')
+      $endpoint = "https://tiles.planet.com/data/v1/item-types/PSScene/items/{$imageId}/thumb";
+      $response = Http::withBasicAuth($this->apiKey, '')
         ->withOptions(['verify' => false])
-        ->get($endpoint);
-  
-        if ($response->successful()) {
-          return [
-            'content' => $response->body(),
-            'content_type' => $response->header('Content-Type'),
-          ];
-        }
-  
-        throw new \Exception('Failed to fetch thumbnail');
+        ->get($endpoint, ['width' => $width]);
+
+      if ($response->successful()) {
+        return [
+          'content' => $response->body(),
+          'content_type' => $response->header('Content-Type'),
+        ];
+      }
+
+      throw new \Exception('Failed to fetch thumbnail');
     }
 
     /**

@@ -19,6 +19,8 @@ type GeoDataContextType = {
   setStartDate: (date: string) => void;
   endDate: string;
   setEndDate: (date: string) => void;
+  tiffBuffer: ArrayBuffer | null;
+  setTiffBuffer: (buffer: ArrayBuffer) => void;
 };
 
 const GeoDataContext = createContext<GeoDataContextType | undefined>(undefined);
@@ -27,10 +29,11 @@ export const GeoDataProvider = ({ children }: { children: React.ReactNode }) => 
   const [geoJson, setGeoJson] = useState<GeoJsonType | null>(null);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [tiffBuffer, setTiffBuffer] = useState<ArrayBuffer | null>(null);
 
 
   return (
-    <GeoDataContext.Provider value={{ geoJson, setGeoJson, startDate, setStartDate, endDate, setEndDate }}>
+    <GeoDataContext.Provider value={{ geoJson, setGeoJson, startDate, setStartDate, endDate, setEndDate, tiffBuffer, setTiffBuffer }}>
       {children}
     </GeoDataContext.Provider>
   );

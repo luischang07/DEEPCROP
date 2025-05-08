@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useGeoData } from '../../hooks/geodata-context';
 import ImageCard from '../image-card/image-card';
 import './sidebar.css';
-import { QrCode } from 'lucide-react';
 
 interface imageResultProps {
     id: string;
@@ -16,6 +15,7 @@ const Sidebar = () => {
     const [selectedName, setSelectedName] = useState('');
     const { geoJson, startDate, setStartDate, endDate, setEndDate } = useGeoData();
     const [imageResults, setImageResults] = useState<imageResultProps[]>([]);
+    const { setTiffBuffer } = useGeoData();
 
     const handleClickDescarga = () => {
         setActiveTab('descarga');
@@ -61,11 +61,15 @@ const Sidebar = () => {
         }
     };
 
-    const handleFileChange = (event) => {
+    const handleFileChange = async (event) => {
         const file = event.target.files[0];
-        setSelectedFile(file);
-        setSelectedName(file.name);
-        setActiveTab('analisis');
+        if (file) {
+            const buffer = await file.arrayBuffer();
+            setSelectedFile(file);
+            setSelectedName(file.name);
+            setTiffBuffer(buffer);
+            setActiveTab('analisis');
+        }
     };
 
     return (
@@ -91,7 +95,7 @@ const Sidebar = () => {
                     <div className="sidebar-content">
                         <div className="checkbox-group">
                             <label>
-                                <input type="checkbox" disabled/>
+                                <input type="checkbox" disabled />
                                 <span>Sentinel</span>
                             </label>
                             <label>

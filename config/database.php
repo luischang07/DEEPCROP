@@ -36,7 +36,6 @@ return [
         'dsn'      => env('DB_URI'),
         'database' => env('DB_DATABASE'),
     ],
-
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),

@@ -34,5 +34,14 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    
+    'planet' => [
+        'api_key' => env('PLANET_API_KEY'),
+    ],
+
+    'sentinelhub' => [
+        'client_id' => env('SENTINELHUB_CLIENT_ID'),
+        'client_secret' => env('SENTINELHUB_CLIENT_SECRET'),
+],
 
 ];

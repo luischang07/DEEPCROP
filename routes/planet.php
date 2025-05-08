@@ -12,3 +12,4 @@ Route::get('/items/{id}/assets', [PlanetController::class, 'getAssets']);
 // Activar un asset específico
 Route::post('/items/{id}/activate', [PlanetController::class, 'activateAsset']);
 Route::get('/items/{id}/check-activation', [PlanetController::class, 'checkActivation']);
+Route::get('/thumbnail/{imageId}', [PlanetController::class, 'getThumbnailImage']);

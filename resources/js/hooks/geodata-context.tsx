@@ -5,11 +5,11 @@ type GeoJsonType = {
   features: Array<{
     type: string;
     properties: Record<string, object>;
-    geometry: {
-      type: string;
-      coordinates: number[];
-    };
   }>;
+  geometry: {
+    type: string;
+    coordinates: number[];
+  };
 };
 
 type GeoDataContextType = {

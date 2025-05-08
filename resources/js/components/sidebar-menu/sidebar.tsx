@@ -1,14 +1,21 @@
 import { useState } from 'react';
+import { useGeoData } from '../../hooks/geodata-context';
 import ImageCard from '../image-card/image-card';
 import './sidebar.css';
-import { useGeoData } from '../../hooks/geodata-context';
+import { QrCode } from 'lucide-react';
+
+interface imageResultProps {
+    id: string;
+    date: string;
+    thumbnail: string;
+}
 
 const Sidebar = () => {
     const [activeTab, setActiveTab] = useState('descarga');
     const [selectedFile, setSelectedFile] = useState(null);
-    const [selectedName, setSelectedName] = useState("");
+    const [selectedName, setSelectedName] = useState('');
     const { geoJson, startDate, setStartDate, endDate, setEndDate } = useGeoData();
-
+    const [imageResults, setImageResults] = useState<imageResultProps[]>([]);
 
     const handleClickDescarga = () => {
         setActiveTab('descarga');
@@ -18,16 +25,47 @@ const Sidebar = () => {
         setActiveTab('analisis');
     };
 
-    const handleClickBusqueda = () => {
-        alert(`Buscando imágenes entre ${startDate} y ${endDate} con el poligono ${geoJson}`);
-        setActiveTab('resultados');
+    const handleClickBusqueda = async () => {
+        try {
+            const response = await fetch('/api/planet/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    geometry: geoJson?.geometry,
+                    date_range: {
+                        start: startDate,
+                        end: endDate,
+                    },
+                    max_cloud_cover: 10,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const parsedResults = data.features.map((feature) => ({
+                id: feature.id,
+                date: new Date(feature.properties.acquired).toLocaleDateString('es-MX'),
+                thumbnail: feature._links.thumbnail,
+            }));
+
+            setImageResults(parsedResults);
+            setActiveTab('resultados');
+        } catch (error) {
+            console.error('Error fetching image data:', error);
+            alert('Error al buscar imágenes. Intenta nuevamente.');
+        }
     };
-    
+
     const handleFileChange = (event) => {
-      const file = event.target.files[0];
-      setSelectedFile(file);
-      setSelectedName(file.name);
-      setActiveTab('analisis');
+        const file = event.target.files[0];
+        setSelectedFile(file);
+        setSelectedName(file.name);
+        setActiveTab('analisis');
     };
 
     return (
@@ -53,7 +91,7 @@ const Sidebar = () => {
                     <div className="sidebar-content">
                         <div className="checkbox-group">
                             <label>
-                                <input type="checkbox" defaultChecked />
+                                <input type="checkbox" disabled/>
                                 <span>Sentinel</span>
                             </label>
                             <label>
@@ -67,14 +105,14 @@ const Sidebar = () => {
                             <div className="time-input">
                                 <label>Desde:</label>
                                 <div className="input-group">
-                                    <input type="date" defaultValue="2025-03-02" onChange={(e) => setStartDate(e.target.value)}/>
+                                    <input type="date" defaultValue="2025-03-02" onChange={(e) => setStartDate(e.target.value)} />
                                     <input type="time" defaultValue={'12:00'} />
                                 </div>
                             </div>
                             <div className="time-input">
                                 <label>Hasta:</label>
                                 <div className="input-group">
-                                    <input type="date" defaultValue="2025-04-02" onChange={(e) => setEndDate(e.target.value)}/>
+                                    <input type="date" defaultValue="2025-04-02" onChange={(e) => setEndDate(e.target.value)} />
                                     <input type="time" defaultValue={'12:00'} />
                                 </div>
                             </div>
@@ -85,7 +123,7 @@ const Sidebar = () => {
                         </button>
 
                         <div className="file-upload">
-                            <h3>{selectedName || "Subir imagen"}</h3>
+                            <h3>{selectedName || 'Subir imagen'}</h3>
                             <img src="/icons/upload.png" alt="upload" />
                             <input type="file" onChange={handleFileChange} />
                         </div>
@@ -96,10 +134,9 @@ const Sidebar = () => {
                         <button className="search-button" onClick={handleClickDescarga}>
                             Hacer otra búsqueda
                         </button>
-                        <ImageCard id="S2B_MSIL2AS2B_MS" date="30/04/2025" />
-                        <ImageCard id="S2B_MSIL2AS2B_MS" date="30/04/2025" />
-                        <ImageCard id="S2B_MSIL2AS2B_MS" date="30/04/2025" />
-                        <ImageCard id="S2B_MSIL2AS2B_MS" date="30/04/2025" />
+                        {imageResults.map((img, index) => (
+                            <ImageCard key={index} id={img.id} date={img.date} thumbnail={`/api/planet/thumbnail/${img.id}`} />
+                        ))}
                     </div>
                 ) : null}
                 {activeTab == 'analisis' ? (

@@ -73,6 +73,24 @@ class PlanetController extends Controller
             return $this->buildErrorResponse('Activation failed', $e);
         }
     }
+    /**
+     * Función para obtener la miniatura de una imagen
+     * 
+     * @param string $id ID del item a activar
+     * @param PlanetService $planetService Servicio para interactuar con la API de Planet
+     * @return \Illuminate\Http\JsonResponse Respuesta JSON con estado del asset o errores
+     */
+    public function getThumbnailImage(string $imageId, PlanetService $planetService){
+      try {
+        $image = $planetService->getThumbnail($imageId);
+        return response($image['content'], 200)
+            ->header('Content-Type', $image['content_type']);
+      } catch (\Exception $e) {
+        Log::error("Thumbnail fetch failed for {$imageId  }: ".$e->getMessage());
+        return $this->buildErrorResponse('Thumbnail fetch failed', $e);
+      }
+    }
+
 
     /**
      * Valida los parámetros de búsqueda del request

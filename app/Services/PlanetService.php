@@ -72,6 +72,29 @@ class PlanetService
     }
 
     /**
+     * Función para obtener la miniatura de una imagen
+     * @param string $itemId ID del item
+     * @return array miniatura de la imagen
+     * @throws Exception Si la solicitud falla
+     */
+    public function getThumbnail(string $imageId): array
+    {
+        $endpoint = "https://tiles.planet.com/data/v1/item-types/PSScene/items/{$imageId}/thumb";
+        $response = Http::withBasicAuth($this->apiKey, '')
+        ->withOptions(['verify' => false])
+        ->get($endpoint);
+  
+        if ($response->successful()) {
+          return [
+            'content' => $response->body(),
+            'content_type' => $response->header('Content-Type'),
+          ];
+        }
+  
+        throw new \Exception('Failed to fetch thumbnail');
+    }
+
+    /**
      * Activa el asset basic_analytic_4b para un item específico.
      * @param string $itemId ID del item
      * @return array Estado actualizado de los assets

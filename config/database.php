@@ -30,7 +30,6 @@ return [
     */
 
     'connections' => [
-
       'mongodb' => [
         'driver'   => 'mongodb',
         'dsn'      => env('DB_URI'),

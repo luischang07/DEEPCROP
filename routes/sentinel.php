@@ -5,7 +5,7 @@ use App\Http\Controllers\SentinelController;
 
 Route::post('/search', [SentinelController::class, 'receiveCoordinates']);
 
-/*Route::get('download/{file_name}', [SentinelController::class, 'downloadImage'])
-    ->name('download.sentinel');*/
 
-//crear enpoint para descargar la imagen y retornarla al frontend
+Route::post('/searchEngine', [SentinelController::class, 'searchEngine']);
+
+Route::post('/engine/download', [SentinelController::class, 'downloadBand']);

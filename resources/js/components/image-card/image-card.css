@@ -13,6 +13,8 @@
     color: #2d4c84;
     width: 75%;
     font-weight: bold;
+    inline-size: 67%;
+    overflow-wrap: break-word;
 }
 
 .thumbnail {

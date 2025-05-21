@@ -7,6 +7,7 @@ interface imageResultProps {
     id: string;
     date: string;
     thumbnail: string;
+    coordinates: object;
 }
 
 const Sidebar = () => {
@@ -27,7 +28,7 @@ const Sidebar = () => {
 
     const handleClickBusqueda = async () => {
         try {
-            const response = await fetch('/api/planet/search', {
+            const planetResponse = await fetch('/api/planet/search', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -42,18 +43,51 @@ const Sidebar = () => {
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (!planetResponse.ok) {
+                throw new Error(`Planet API error! status: ${planetResponse.status}`);
             }
 
-            const data = await response.json();
-            const parsedResults = data.features.map((feature) => ({
+            const planetData = await planetResponse.json();
+            const planetResults = planetData.features.map((feature) => ({
                 id: feature.id,
                 date: new Date(feature.properties.acquired).toLocaleDateString('es-MX'),
                 thumbnail: feature._links.thumbnail,
+                source: 'planet',
             }));
 
-            setImageResults(parsedResults);
+            const sentinelResponse = await fetch('/api/sentinel/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    coordinates: geoJson?.geometry.coordinates[0],
+                    start_date: startDate,
+                    end_date: endDate,
+                }),
+            });
+
+            if (!sentinelResponse.ok) {
+                throw new Error(`Sentinel API error! status: ${sentinelResponse.status}`);
+            }
+
+            const sentinelData = await sentinelResponse.json();
+            const sentinelResults = sentinelData.products.features.map((feature) => {
+                const derivedFromLink = feature.links.find((link) => link.rel === 'derived_from');
+
+                return {
+                    id: feature.id,
+                    date: new Date(feature.properties.datetime).toLocaleDateString('es-MX'),
+                    thumbnail: null,
+                    coordinates: feature.geometry.coordinates[0][0],
+                    link: derivedFromLink?.href || null,
+                    source: 'sentinel',
+                };
+            });
+
+            const combinedResults = [...planetResults, ...sentinelResults];
+
+            setImageResults(combinedResults);
             setActiveTab('resultados');
         } catch (error) {
             console.error('Error fetching image data:', error);
@@ -95,7 +129,7 @@ const Sidebar = () => {
                     <div className="sidebar-content">
                         <div className="checkbox-group">
                             <label>
-                                <input type="checkbox" disabled />
+                                <input type="checkbox" defaultChecked/>
                                 <span>Sentinel</span>
                             </label>
                             <label>
@@ -139,7 +173,7 @@ const Sidebar = () => {
                             Hacer otra búsqueda
                         </button>
                         {imageResults.map((img, index) => (
-                            <ImageCard key={index} id={img.id} date={img.date} thumbnail={`/api/planet/thumbnail/${img.id}`} />
+                            <ImageCard key={index} id={img.id} date={img.date} thumbnail={`/api/planet/thumbnail/${img.id}`} coordinates={img.coordinates} />
                         ))}
                     </div>
                 ) : null}

@@ -1,6 +1,8 @@
 import AppLayout from '@/layouts/app-layout';
+import InteractiveMap from '@/components/InteractiveMap';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
+import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -10,19 +12,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Dashboard() {
+    const [selectedAreas, setSelectedAreas] = useState<any[]>([]);
+
+    const handleAreaSelected = (area: any) => {
+        console.log('Área seleccionada:', area);
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
             
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2">
-                <div
-                    className="flex min-h-svh flex-row items-center justify-evenly rounded-xl"
-                    style={{
-                        backgroundImage: "url('/images/ejemplo-satelite.jpg')",
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                    }}
-                />
+                <div className="flex min-h-svh flex-row items-center justify-center rounded-xl">
+                    <InteractiveMap 
+                        onAreaSelected={handleAreaSelected}
+                        className="w-full h-full"
+                    />
+                </div>
             </div>
         </AppLayout>
     );

@@ -25,6 +25,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('espacios-trabajo');
     })->name('espacios-trabajo');
     
+    Route::get('satellite-images', function () {
+        return Inertia::render('SatelliteImages');
+    })->name('satellite-images');
+    
     Route::post('/api/export-area', [AreaExportController::class, 'exportArea'])->name('api.export-area');
 });
 

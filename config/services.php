@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'satellite' => [
+        'service_url' => env('SATELLITE_SERVICE_URL', 'http://localhost:8001'),
+    ],
+
 ];

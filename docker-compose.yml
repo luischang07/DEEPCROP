@@ -1,0 +1,39 @@
+services:
+  # MongoDB Database
+  mongo:
+    image: mongo:8.0
+    container_name: deepcrop-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: deepcrop_user
+      MONGO_INITDB_ROOT_PASSWORD: deepcrop_password
+      MONGO_INITDB_DATABASE: DeepCroop
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/development/mongo/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - deepcrop-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: deepcrop-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - deepcrop-network
+
+networks:
+  deepcrop-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local

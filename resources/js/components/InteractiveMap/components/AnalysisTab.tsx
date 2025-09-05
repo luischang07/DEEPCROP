@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ExportFormat, SelectedArea } from '../types';
 import { formatArea } from '../utils';
 
@@ -20,28 +20,33 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({
     onSaveImage
 }) => {
     return (
-        <div className="space-y-4">
-            {/* Analysis buttons */}
-            <div className="space-y-2">
-                <hr className="my-4" />
-                {/* Export area section */}
-                <div className="space-y-3 bg-gray-50 p-3 rounded-lg">
-                    <h4 className="text-sm font-semibold text-gray-800">Exportar Área Seleccionada:</h4>
-                    
+        <div className="space-y-6">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
+                        <span className="text-white text-sm"></span>
+                    </div>
                     <div>
-                        <label className="block text-sm text-gray-600 mb-1">Formato de exportación:</label>
+                        <h3 className="text-lg font-semibold text-gray-800">Exportar Área</h3>
+                        <p className="text-sm text-gray-600">Descarga el área seleccionada en diferentes formatos</p>
+                    </div>
+                </div>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Formato de exportación:</label>
                         <select 
                             value={exportFormat}
                             onChange={(e) => onExportFormatChange(e.target.value as ExportFormat)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                         >
-                            <optgroup label="Formatos de Imagen">
-                                <option value="tiff">TIFF (Recomendado)</option>
-                                <option value="png">PNG</option>
-                                <option value="jpg">JPG</option>
+                            <optgroup label=" Formatos de Imagen">
+                                <option value="tiff">TIFF (Recomendado para GIS)</option>
+                                <option value="png">PNG (Transparencia)</option>
+                                <option value="jpg">JPG (Comprimido)</option>
                             </optgroup>
-                            <optgroup label="Formatos de Datos Geográficos">
-                                <option value="geojson">GeoJSON</option>
+                            <optgroup label=" Formatos Geográficos">
+                                <option value="geojson">GeoJSON (Web mapping)</option>
                                 <option value="kml">KML (Google Earth)</option>
                                 <option value="csv">CSV (Coordenadas)</option>
                             </optgroup>
@@ -49,10 +54,10 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({
                     </div>
                     
                     <button 
-                        className={`w-full py-2 px-4 rounded font-medium flex items-center justify-center ${
+                        className={`w-full py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-all ${
                             isExporting || selectedAreas.length === 0
                                 ? 'bg-gray-400 cursor-not-allowed' 
-                                : 'bg-blue-500 hover:bg-blue-600'
+                                : 'bg-gray-600 hover:bg-gray-700 shadow-lg hover:shadow-xl'
                         } text-white`}
                         onClick={onExportArea}
                         disabled={isExporting || selectedAreas.length === 0}
@@ -68,40 +73,73 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({
                         ) : (
                             <>
                                 {['geojson', 'csv', 'kml'].includes(exportFormat) ? (
-                                    <>📄 Exportar Coordenadas ({exportFormat.toUpperCase()})</>
+                                    <> Exportar Coordenadas ({exportFormat.toUpperCase()})</>
                                 ) : (
-                                    <>⬇️ Descargar Área ({exportFormat.toUpperCase()})</>
+                                    <> Descargar Área ({exportFormat.toUpperCase()})</>
                                 )}
                             </>
                         )}
                     </button>
                     
                     {selectedAreas.length > 0 && (
-                        <div className="text-xs text-green-600 bg-green-50 p-2 rounded border">
-                            ✅ Área seleccionada: {selectedAreas.length} región{selectedAreas.length > 1 ? 'es' : ''}
-                            <br />
-                            {selectedAreas[selectedAreas.length - 1].area && (
-                                <span className="text-gray-600">
-                                    Tamaño: {formatArea(selectedAreas[selectedAreas.length - 1].area!)}
-                                </span>
-                            )}
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                                <span className="text-green-600 mt-0.5"></span>
+                                <div className="text-sm">
+                                    <p className="text-green-800 font-medium">
+                                        Área lista para exportar
+                                    </p>
+                                    <p className="text-green-600 mt-1">
+                                        {selectedAreas.length} región{selectedAreas.length > 1 ? 'es' : ''} seleccionada{selectedAreas.length > 1 ? 's' : ''}
+                                        {selectedAreas[selectedAreas.length - 1].area && (
+                                            <span className="block text-gray-600">
+                                                Tamaño: {formatArea(selectedAreas[selectedAreas.length - 1].area!)}
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     )}
                     
                     {selectedAreas.length === 0 && (
-                        <p className="text-xs text-gray-500 text-center">
-                            Dibuja un área en el mapa para habilitarlo
-                        </p>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-amber-800">
+                                <span></span>
+                                <p className="text-sm">
+                                    Dibuja un área en el mapa para habilitar la exportación
+                                </p>
+                            </div>
+                        </div>
                     )}
+                </div>
+            </div>
+
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                        <span className="text-white text-sm"></span>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Guardar Proyecto</h3>
+                        <p className="text-sm text-gray-600">Guarda tu trabajo para continuar más tarde</p>
+                    </div>
                 </div>
                 
                 <button 
-                    className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded font-medium"
+                    className="w-full py-3 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                     onClick={onSaveImage}
                 >
-                    💾 Guardar en...
+                    <span></span>
+                    <span>Guardar en Workspace</span>
                 </button>
-                <hr className="my-4" />
+                
+                <div className="mt-3 p-3 bg-green-100 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 text-sm text-green-800">
+                        <span></span>
+                        <span>Guarda áreas seleccionadas, configuraciones y resultados de búsqueda en tu workspace personal.</span>
+                    </div>
+                </div>
             </div>
         </div>
     );

@@ -10,4 +10,4 @@ export interface InteractiveMapProps {
 }
 
 export type ExportFormat = 'tiff' | 'jpg' | 'png' | 'geojson' | 'csv' | 'kml';
-export type TabType = 'descarga' | 'analisis';
+export type TabType = 'descarga' | 'analisis' | 'satelitales';

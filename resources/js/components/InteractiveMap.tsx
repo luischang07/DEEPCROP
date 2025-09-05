@@ -9,6 +9,7 @@ import 'leaflet-geometryutil';
 import { TabButtons } from './InteractiveMap/components/TabButtons';
 import { DownloadTab } from './InteractiveMap/components/DownloadTab';
 import { AnalysisTab } from './InteractiveMap/components/AnalysisTab';
+import { SatelliteTab } from './InteractiveMap/components/SatelliteTab';
 import { SaveModal } from './InteractiveMap/components/SaveModal';
 import { SaveToWorkspaceModal } from './InteractiveMap/components/SaveToWorkspaceModal';
 import { AreaInfoPanel } from './InteractiveMap/components/AreaInfoPanel';
@@ -57,6 +58,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
     const [geoJson, setGeoJson] = useState<any>(null);
     const [exportFormat, setExportFormat] = useState<ExportFormat>('tiff');
     const [isExporting, setIsExporting] = useState(false);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
 
     // Modal states
     const [showSaveModal, setShowSaveModal] = useState(false);
@@ -241,15 +243,98 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
             return;
         }
 
+        if (!sentinelChecked && !planetChecked) {
+            alert('Por favor selecciona al menos un satélite');
+            return;
+        }
+
+        if (!startDate || !endDate) {
+            alert('Por favor selecciona un rango de fechas válido');
+            return;
+        }
+
         setIsSearching(true);
         try {
-            // Implementar lógica de búsqueda
-            alert('Funcionalidad de búsqueda en desarrollo');
+            // Solo procesar Sentinel por ahora, ya que Planet Scope requiere API diferente
+            if (sentinelChecked) {
+                console.log('Iniciando búsqueda de imágenes Sentinel...');
+                console.log('Área:', geoJson);
+                console.log('Fechas:', { startDate, endDate });
+
+                const response = await fetch('/api/satellite/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    body: JSON.stringify({
+                        coordinates: geoJson.geometry.coordinates,
+                        start_date: startDate,
+                        end_date: endDate
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error al buscar imágenes');
+                }
+
+                console.log('Imágenes encontradas:', data);
+                
+                if (data.images && data.images.length > 0) {
+                    setSearchResults(data.images);
+                    alert(`Se encontraron ${data.images.length} imágenes de Sentinel-2. Ve al tab "Satelitales" para verlas.`);
+                    
+                    // Cambiar al tab de satelitales para mostrar los resultados
+                    setActiveTab('satelitales');
+                    
+                } else {
+                    setSearchResults([]);
+                    alert('No se encontraron imágenes en el área y rango de fechas especificados');
+                }
+            }
+
+            if (planetChecked) {
+                alert('La búsqueda en Planet Scope estará disponible próximamente');
+            }
+
         } catch (error) {
             console.error('Error fetching image data:', error);
-            alert('Error al buscar imágenes. Intenta nuevamente.');
+            alert(`Error al buscar imágenes: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         } finally {
             setIsSearching(false);
+        }
+    };
+
+    const handleDownloadImage = async (imageId: string, bandName: string) => {
+        try {
+            console.log('Descargando imagen:', { imageId, bandName });
+            
+            const response = await fetch('/api/satellite/download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({
+                    image_id: imageId,
+                    band_name: bandName
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Error al obtener URL de descarga');
+            }
+
+            // Abrir URL de descarga en nueva ventana
+            window.open(data.download_url, '_blank');
+            
+        } catch (error) {
+            console.error('Error downloading image:', error);
+            alert(`Error al descargar imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     };
 
@@ -844,6 +929,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                         onEndDateChange={setEndDate}
                         onFileChange={handleFileChange}
                         onSearch={handleSearch}
+                    />
+                );
+            case 'satelitales':
+                return (
+                    <SatelliteTab
+                        searchResults={searchResults}
+                        onDownloadImage={handleDownloadImage}
                     />
                 );
             case 'analisis':

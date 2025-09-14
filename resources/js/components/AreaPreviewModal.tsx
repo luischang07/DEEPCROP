@@ -178,9 +178,9 @@ export const AreaPreviewModal: React.FC<AreaPreviewModalProps> = ({
 
     return (
         <div className="fixed inset-0 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200">
+            <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b">
+                <div className="flex items-center justify-between p-6 border-b flex-shrink-0">
                     <div>
                         <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
                         {description && (
@@ -195,54 +195,57 @@ export const AreaPreviewModal: React.FC<AreaPreviewModalProps> = ({
                     </button>
                 </div>
 
-                {/* Stats */}
-                <div className="flex gap-4 p-6 border-b bg-gray-50">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="w-4 h-4" />
-                        <span>{areas.length} área{areas.length !== 1 ? 's' : ''} seleccionada{areas.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    {getTotalArea() > 0 && (
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto">
+                    {/* Stats */}
+                    <div className="flex gap-4 p-6 border-b bg-gray-50">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Ruler className="w-4 h-4" />
-                            <span>Área total: {formatArea(getTotalArea())}</span>
+                            <MapPin className="w-4 h-4" />
+                            <span>{areas.length} área{areas.length !== 1 ? 's' : ''} seleccionada{areas.length !== 1 ? 's' : ''}</span>
                         </div>
-                    )}
-                </div>
-
-                {/* Map */}
-                <div className="flex-1 p-6">
-                    <div 
-                        ref={mapContainerRef} 
-                        className="w-full h-96 border border-gray-300 rounded-lg"
-                        style={{ minHeight: '400px' }}
-                    />
-                </div>
-
-                {/* Areas List */}
-                <div className="p-6 border-t bg-gray-50">
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Áreas Detalladas</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {areas.map((area, index) => (
-                            <div key={index} className="bg-white p-3 rounded-lg border">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div 
-                                        className="w-3 h-3 rounded-full"
-                                        style={{ backgroundColor: getAreaColor(index) }}
-                                    />
-                                    <span className="font-medium text-sm">Área {index + 1}</span>
-                                </div>
-                                <div className="text-xs text-gray-600 space-y-1">
-                                    <div>Tipo: {area.type}</div>
-                                    <div>Puntos: {area.coordinates.length}</div>
-                                    {area.area && <div>Área: {formatArea(area.area)}</div>}
-                                </div>
+                        {getTotalArea() > 0 && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <Ruler className="w-4 h-4" />
+                                <span>Área total: {formatArea(getTotalArea())}</span>
                             </div>
-                        ))}
+                        )}
+                    </div>
+
+                    {/* Map */}
+                    <div className="p-6">
+                        <div 
+                            ref={mapContainerRef} 
+                            className="w-full h-96 border border-gray-300 rounded-lg"
+                            style={{ minHeight: '400px' }}
+                        />
+                    </div>
+
+                    {/* Areas List */}
+                    <div className="p-6 border-t bg-gray-50">
+                        <h3 className="text-sm font-medium text-gray-900 mb-3">Áreas Detalladas</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {areas.map((area, index) => (
+                                <div key={index} className="bg-white p-3 rounded-lg border">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div 
+                                            className="w-3 h-3 rounded-full"
+                                            style={{ backgroundColor: getAreaColor(index) }}
+                                        />
+                                        <span className="font-medium text-sm">Área {index + 1}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-600 space-y-1">
+                                        <div>Tipo: {area.type}</div>
+                                        <div>Puntos: {area.coordinates.length}</div>
+                                        {area.area && <div>Área: {formatArea(area.area)}</div>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end p-6 border-t">
+                <div className="flex justify-end p-6 border-t flex-shrink-0 bg-white">
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"

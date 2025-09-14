@@ -4,6 +4,17 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libwebp-dev \
+    libopenjp2-7-dev \
+    zlib1g-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Crear directorio de trabajo

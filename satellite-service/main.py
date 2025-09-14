@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import ee
@@ -7,6 +8,10 @@ import json
 import os
 import logging
 from datetime import datetime
+from PIL import Image
+# import cv2  # Comentado temporalmente para solo usar Pillow
+import numpy as np
+import io
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -319,6 +324,103 @@ async def get_available_bands(collection_name: str):
     except Exception as e:
         logger.error(f"Error obteniendo bandas: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo bandas: {str(e)}")
+
+@app.post("/convert-image")
+async def convert_image(
+    file: UploadFile = File(...), 
+    output_format: str = "JPEG",
+    quality: int = 85,
+    max_width: Optional[int] = None,
+    max_height: Optional[int] = None
+):
+    """
+    Convierte una imagen TIFF a formato JPEG o PNG para previsualización
+    """
+    try:
+        # Validar formato de entrada
+        if not file.filename.lower().endswith(('.tiff', '.tif')):
+            raise HTTPException(status_code=400, detail="Solo se aceptan archivos TIFF")
+        
+        # Validar formato de salida
+        if output_format.upper() not in ["JPEG", "PNG"]:
+            raise HTTPException(status_code=400, detail="Formato de salida debe ser JPEG o PNG")
+        
+        logger.info(f"Convirtiendo archivo TIFF: {file.filename}")
+        
+        # Leer el archivo TIFF
+        content = await file.read()
+        
+        # Convertir usando PIL
+        try:
+            # Abrir imagen con PIL
+            with Image.open(io.BytesIO(content)) as img:
+                logger.info(f"Imagen cargada: {img.size}, modo: {img.mode}")
+                
+                # Convertir a RGB si es necesario (para JPEG)
+                if output_format.upper() == "JPEG" and img.mode in ("RGBA", "P", "L"):
+                    img = img.convert("RGB")
+                elif output_format.upper() == "PNG" and img.mode == "P":
+                    img = img.convert("RGBA")
+                
+                # Redimensionar si se especifica
+                if max_width or max_height:
+                    original_width, original_height = img.size
+                    
+                    # Calcular nuevo tamaño manteniendo aspect ratio
+                    if max_width and max_height:
+                        ratio = min(max_width / original_width, max_height / original_height)
+                    elif max_width:
+                        ratio = max_width / original_width
+                    else:
+                        ratio = max_height / original_height
+                    
+                    new_width = int(original_width * ratio)
+                    new_height = int(original_height * ratio)
+                    
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    logger.info(f"Imagen redimensionada a: {new_width}x{new_height}")
+                
+                # Guardar en memoria
+                output_buffer = io.BytesIO()
+                
+                if output_format.upper() == "JPEG":
+                    img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
+                    media_type = "image/jpeg"
+                    extension = "jpg"
+                else:
+                    img.save(output_buffer, format="PNG", optimize=True)
+                    media_type = "image/png"
+                    extension = "png"
+                
+                output_buffer.seek(0)
+                
+                # Generar nombre de archivo de salida
+                base_name = os.path.splitext(file.filename)[0]
+                output_filename = f"{base_name}_preview.{extension}"
+                
+                logger.info(f"Conversión exitosa: {output_filename}")
+                
+                return StreamingResponse(
+                    io.BytesIO(output_buffer.read()),
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={output_filename}",
+                        "X-Conversion-Status": "success"
+                    }
+                )
+                
+        except Exception as pil_error:
+            logger.error(f"Error al convertir con PIL: {str(pil_error)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"No se pudo convertir la imagen TIFF: {str(pil_error)}"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error general en conversión: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

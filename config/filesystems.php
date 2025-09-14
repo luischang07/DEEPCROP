@@ -68,6 +68,19 @@ return [
             'report' => false,
         ],
 
+        'minio' => [
+            'driver' => 's3',
+            'key' => env('MINIO_ACCESS_KEY', 'deepcrop_minio_user'),
+            'secret' => env('MINIO_SECRET_KEY', 'deepcrop_minio_password123'),
+            'region' => env('MINIO_REGION', 'us-east-1'),
+            'bucket' => env('MINIO_BUCKET', 'deepcrop-images'),
+            'url' => env('MINIO_URL'),
+            'endpoint' => env('MINIO_ENDPOINT', 'http://localhost:9000'),
+            'use_path_style_endpoint' => env('MINIO_USE_PATH_STYLE_ENDPOINT', true),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

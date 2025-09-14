@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\WorkspaceFileController;
+use App\Http\Controllers\WorkspaceImageController;
 
 // Rutas de Workspaces - Con prefijo /api/
 Route::prefix('api')->middleware(['auth'])->group(function () {
@@ -31,6 +32,22 @@ Route::prefix('api')->middleware(['auth'])->group(function () {
             Route::get('/download', [WorkspaceFileController::class, 'download'])->middleware('workspace.permission:read');
             Route::put('/', [WorkspaceFileController::class, 'update'])->middleware('workspace.permission:write');
             Route::delete('/', [WorkspaceFileController::class, 'destroy'])->middleware('workspace.permission:write');
+        });
+
+        // Imágenes del workspace
+        Route::prefix('images')->group(function () {
+            Route::get('/', [WorkspaceImageController::class, 'index'])->middleware('workspace.permission:read');
+            Route::post('/', [WorkspaceImageController::class, 'store'])->middleware('workspace.permission:write');
+            Route::post('/bulk', [WorkspaceImageController::class, 'bulkStore'])->middleware('workspace.permission:write');
+            Route::get('/stats', [WorkspaceImageController::class, 'stats'])->middleware('workspace.permission:read');
+            Route::get('/tags', [WorkspaceImageController::class, 'tags'])->middleware('workspace.permission:read');
+            
+            Route::prefix('{image}')->group(function () {
+                Route::get('/', [WorkspaceImageController::class, 'show'])->middleware('workspace.permission:read');
+                Route::get('/download', [WorkspaceImageController::class, 'download'])->middleware('workspace.permission:read');
+                Route::put('/', [WorkspaceImageController::class, 'update'])->middleware('workspace.permission:write');
+                Route::delete('/', [WorkspaceImageController::class, 'destroy'])->middleware('workspace.permission:write');
+            });
         });
     });
 });

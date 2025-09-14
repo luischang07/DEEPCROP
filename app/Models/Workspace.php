@@ -34,6 +34,11 @@ class Workspace extends Model
         return $this->hasMany(WorkspaceFile::class, 'workspace_id');
     }
 
+    public function images(): HasMany
+    {
+        return $this->hasMany(WorkspaceImage::class, 'workspace_id');
+    }
+
     public function workspaceUsers(): HasMany
     {
         return $this->hasMany(WorkspaceUser::class, 'workspace_id');
@@ -77,7 +82,7 @@ class Workspace extends Model
             'read' => in_array($role, ['owner', 'editor', 'viewer']),
             'write' => in_array($role, ['owner', 'editor']),
             'manage' => $role === 'owner',
-            'delete' => $role === 'owner',
+            'delete' => in_array($role, ['owner', 'editor']),
             default => false,
         };
     }

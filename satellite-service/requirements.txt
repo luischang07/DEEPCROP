@@ -7,3 +7,5 @@ google-auth-oauthlib==1.1.0
 google-auth-httplib2==0.1.1
 python-multipart==0.0.6
 requests==2.31.0
+Pillow==10.1.0
+numpy==1.24.3

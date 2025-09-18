@@ -49,16 +49,20 @@ const ImageWithRetry: React.FC<{
     alt: string;
     onImageSelect?: () => void;
     fallbackInfo: { type: string; size: string; };
-}> = ({ workspaceId, imageId, alt, onImageSelect, fallbackInfo }) => {
+    thumbUrl?: string | null;
+}> = ({ workspaceId, imageId, alt, onImageSelect, fallbackInfo, thumbUrl = null }) => {
     const [loadError, setLoadError] = useState(false);
     const [retryCount, setRetryCount] = useState(() => 
         imageCacheService.getRetryCount(imageId, workspaceId)
     );
     const [isLoading, setIsLoading] = useState(true);
-    const [imageUrl, setImageUrl] = useState(() => 
-        imageCacheService.getCachedUrl(imageId, workspaceId) || 
-        imageCacheService.cacheUrl(imageId, workspaceId)
-    );
+    const [imageUrl, setImageUrl] = useState(() => {
+        // Prefer cached thumb url if present
+        const cachedThumb = thumbUrl ? imageCacheService.getCachedUrl(imageId, workspaceId + '-thumb') : null;
+        if (cachedThumb) return cachedThumb;
+        if (thumbUrl) return imageCacheService.cacheUrl(imageId, workspaceId, 0, thumbUrl);
+        return imageCacheService.getCachedUrl(imageId, workspaceId) || imageCacheService.cacheUrl(imageId, workspaceId);
+    });
 
     const handleError = () => {
         console.log('Image load error for:', imageId, imageUrl);
@@ -69,7 +73,9 @@ const ImageWithRetry: React.FC<{
                 setRetryCount(newRetryCount);
                 setLoadError(false);
                 setIsLoading(true);
-                const newUrl = imageCacheService.cacheUrl(imageId, workspaceId, newRetryCount);
+                const newUrl = thumbUrl
+                    ? imageCacheService.cacheUrl(imageId, workspaceId, newRetryCount, thumbUrl)
+                    : imageCacheService.cacheUrl(imageId, workspaceId, newRetryCount);
                 setImageUrl(newUrl);
             }, 1000 * newRetryCount);
         } else {
@@ -89,7 +95,9 @@ const ImageWithRetry: React.FC<{
         setRetryCount(0);
         setLoadError(false);
         setIsLoading(true);
-        const newUrl = imageCacheService.cacheUrl(imageId, workspaceId, 0);
+        const newUrl = thumbUrl
+            ? imageCacheService.cacheUrl(imageId, workspaceId, 0, thumbUrl)
+            : imageCacheService.cacheUrl(imageId, workspaceId, 0);
         setImageUrl(newUrl);
     };
 
@@ -417,6 +425,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
                                                 imageId={image.id}
                                                 alt={image.name}
                                                 onImageSelect={() => onImageSelect?.(image)}
+                                                thumbUrl={image.thumbnail_url || null}
                                                 fallbackInfo={{
                                                     type: image.mime_type.split('/')[1],
                                                     size: image.formatted_size

@@ -6,6 +6,7 @@ use App\Models\Workspace;
 use App\Models\User;
 use App\Models\WorkspaceUser;
 use App\Models\WorkspaceFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -19,38 +20,49 @@ class WorkspaceController extends Controller
         
         // Para MongoDB, obtenemos los workspace IDs donde el usuario es miembro
         $workspaceIds = WorkspaceUser::where('user_id', $user->_id)->pluck('workspace_id');
-        $workspaces = Workspace::whereIn('_id', $workspaceIds)
+        // Cargar workspaces y owner de forma eager
+        $workspacesCollection = Workspace::whereIn('_id', $workspaceIds)
             ->with(['owner'])
+            ->get();
+
+        // Obtener counts agrupados en batch para evitar N+1
+        // For MongoDB avoid raw SQL expressions; fetch and group in PHP
+        $filesCounts = WorkspaceFile::whereIn('workspace_id', $workspacesCollection->pluck('_id')->toArray())
             ->get()
-            ->map(function ($workspace) use ($user) {
-                // Contar archivos
-                $filesCount = WorkspaceFile::where('workspace_id', $workspace->_id)->count();
-                
-                // Contar miembros
-                $membersCount = WorkspaceUser::where('workspace_id', $workspace->_id)->count();
-                
-                return [
-                    'id' => $workspace->_id,
-                    'name' => $workspace->name,
-                    'description' => $workspace->description,
-                    'type' => $workspace->type,
-                    'owner' => [
-                        'id' => $workspace->owner->_id,
-                        'name' => $workspace->owner->name,
-                        'email' => $workspace->owner->email,
-                    ],
-                    'user_role' => $workspace->getUserRole($user),
-                    'files_count' => $filesCount,
-                    'members_count' => $membersCount,
-                    'created_at' => $workspace->created_at,
-                    'updated_at' => $workspace->updated_at,
-                ];
-            })
-            ->sortBy([
-                ['type', 'desc'], // Personal primero
-                ['updated_at', 'desc']
-            ])
-            ->values();
+            ->groupBy('workspace_id')
+            ->map(function ($group) { return $group->count(); })
+            ->toArray();
+
+        $membersCounts = WorkspaceUser::whereIn('workspace_id', $workspacesCollection->pluck('_id')->toArray())
+            ->get()
+            ->groupBy('workspace_id')
+            ->map(function ($group) { return $group->count(); })
+            ->toArray();
+
+        $workspaces = $workspacesCollection->map(function ($workspace) use ($user, $filesCounts, $membersCounts) {
+            $filesCount = $filesCounts[$workspace->_id] ?? 0;
+            $membersCount = $membersCounts[$workspace->_id] ?? 0;
+
+            return [
+                'id' => $workspace->_id,
+                'name' => $workspace->name,
+                'description' => $workspace->description,
+                'type' => $workspace->type,
+                'owner' => [
+                    'id' => $workspace->owner->_id,
+                    'name' => $workspace->owner->name,
+                    'email' => $workspace->owner->email,
+                ],
+                'user_role' => $workspace->getUserRole($user),
+                'files_count' => $filesCount,
+                'members_count' => $membersCount,
+                'created_at' => $workspace->created_at,
+                'updated_at' => $workspace->updated_at,
+            ];
+        })->sortBy([
+            ['type', 'desc'], // Personal primero
+            ['updated_at', 'desc']
+        ])->values();
 
         return response()->json([
             'success' => true,
@@ -89,33 +101,82 @@ class WorkspaceController extends Controller
                 ];
             });
 
-        // Obtener archivos
-        $files = WorkspaceFile::where('workspace_id', $workspace->_id)
+        // Por defecto no retornamos la lista completa de archivos para evitar payloads pesados
+        $files = [];
+        // Small preview to show in the UI without requesting full files list
+        $filesPreview = WorkspaceFile::where('workspace_id', $workspace->_id)
             ->with('uploadedBy')
             ->orderBy('created_at', 'desc')
+            ->take(3)
             ->get()
             ->map(function ($file) {
                 return [
                     'id' => $file->_id,
                     'name' => $file->name,
-                    'original_name' => $file->original_name,
-                    'file_size' => $file->file_size,
                     'file_size_formatted' => $file->getFileSizeFormatted(),
                     'mime_type' => $file->mime_type,
-                    'is_tiff' => $file->isTiff(),
                     'has_geospatial_data' => $file->hasGeospatialData(),
-                    'coordinates' => $file->getCoordinatesArray(),
-                    'is_processed' => $file->is_processed,
-                    'processing_notes' => $file->processing_notes,
-                    'metadata' => $file->metadata,
                     'uploaded_by' => [
                         'id' => $file->uploadedBy->_id,
                         'name' => $file->uploadedBy->name,
                     ],
                     'created_at' => $file->created_at,
-                    'updated_at' => $file->updated_at,
                 ];
-            });
+            })->toArray();
+        $includeFiles = request()->boolean('include_files', false);
+        $filesPerPage = intval(request()->get('files_per_page', 0));
+
+        if ($includeFiles || $filesPerPage > 0) {
+            $query = WorkspaceFile::where('workspace_id', $workspace->_id)->with('uploadedBy')->orderBy('created_at', 'desc');
+            if ($filesPerPage > 0) {
+                $paginated = $query->paginate($filesPerPage);
+                $files = $paginated->getCollection()->map(function ($file) {
+                    return [
+                        'id' => $file->_id,
+                        'name' => $file->name,
+                        'original_name' => $file->original_name,
+                        'file_size' => $file->file_size,
+                        'file_size_formatted' => $file->getFileSizeFormatted(),
+                        'mime_type' => $file->mime_type,
+                        'is_tiff' => $file->isTiff(),
+                        'has_geospatial_data' => $file->hasGeospatialData(),
+                        'coordinates' => $file->getCoordinatesArray(),
+                        'is_processed' => $file->is_processed,
+                        'processing_notes' => $file->processing_notes,
+                        'metadata' => $file->metadata,
+                        'uploaded_by' => [
+                            'id' => $file->uploadedBy->_id,
+                            'name' => $file->uploadedBy->name,
+                        ],
+                        'created_at' => $file->created_at,
+                        'updated_at' => $file->updated_at,
+                    ];
+                })->toArray();
+            } else {
+                $files = $query->get()->map(function ($file) {
+                    return [
+                        'id' => $file->_id,
+                        'name' => $file->name,
+                        'original_name' => $file->original_name,
+                        'file_size' => $file->file_size,
+                        'file_size_formatted' => $file->getFileSizeFormatted(),
+                        'mime_type' => $file->mime_type,
+                        'is_tiff' => $file->isTiff(),
+                        'has_geospatial_data' => $file->hasGeospatialData(),
+                        'coordinates' => $file->getCoordinatesArray(),
+                        'is_processed' => $file->is_processed,
+                        'processing_notes' => $file->processing_notes,
+                        'metadata' => $file->metadata,
+                        'uploaded_by' => [
+                            'id' => $file->uploadedBy->_id,
+                            'name' => $file->uploadedBy->name,
+                        ],
+                        'created_at' => $file->created_at,
+                        'updated_at' => $file->updated_at,
+                    ];
+                })->toArray();
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -132,6 +193,8 @@ class WorkspaceController extends Controller
                 'user_role' => $workspace->getUserRole($user),
                 'members' => $members,
                 'files' => $files,
+                'files_count' => WorkspaceFile::where('workspace_id', $workspace->_id)->count(),
+                'members_count' => WorkspaceUser::where('workspace_id', $workspace->_id)->count(),
                 'created_at' => $workspace->created_at,
                 'updated_at' => $workspace->updated_at,
             ],

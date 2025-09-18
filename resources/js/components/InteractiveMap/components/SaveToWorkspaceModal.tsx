@@ -14,6 +14,8 @@ interface SaveToWorkspaceModalProps {
     onDescriptionChange: (description: string) => void;
     onSave: (workspaceId: string) => void;
     onCancel: () => void;
+    isUploading?: boolean;
+    uploadProgress?: number;
 }
 
 export const SaveToWorkspaceModal: React.FC<SaveToWorkspaceModalProps> = ({
@@ -26,6 +28,7 @@ export const SaveToWorkspaceModal: React.FC<SaveToWorkspaceModalProps> = ({
     onDescriptionChange,
     onSave,
     onCancel
+    , isUploading = false, uploadProgress = 0
 }) => {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
@@ -190,24 +193,33 @@ export const SaveToWorkspaceModal: React.FC<SaveToWorkspaceModalProps> = ({
                     </div>
 
                     {/* Botones */}
-                    <div className="flex space-x-3 mt-6">
-                        <button 
-                            onClick={onCancel}
-                            className="flex-1 py-2 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
-                        >
-                            Cancelar
-                        </button>
-                        <button 
-                            onClick={handleSave}
-                            disabled={!saveTitle.trim() || !selectedWorkspace || loading}
-                            className={`flex-1 py-2 px-4 rounded-md font-medium ${
-                                (!saveTitle.trim() || !selectedWorkspace || loading)
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
-                            }`}
-                        >
-                            💾 Guardar
-                        </button>
+                    <div className="flex flex-col space-y-3 mt-6">
+                        <div className="flex space-x-3">
+                            <button 
+                                onClick={onCancel}
+                                disabled={isUploading}
+                                className={`flex-1 py-2 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium ${isUploading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleSave}
+                                disabled={!saveTitle.trim() || !selectedWorkspace || loading || isUploading}
+                                className={`flex-1 py-2 px-4 rounded-md font-medium ${
+                                    (!saveTitle.trim() || !selectedWorkspace || loading || isUploading)
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                }`}
+                            >
+                                {isUploading ? `Subiendo... ${uploadProgress}%` : '💾 Guardar'}
+                            </button>
+                        </div>
+
+                        {isUploading && (
+                            <div className="w-full bg-gray-100 rounded h-3 overflow-hidden">
+                                <div style={{ width: `${uploadProgress}%` }} className="h-full bg-blue-500 transition-all"></div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 class WorkspaceFileController extends Controller
 {
-    public function index(Workspace $workspace): JsonResponse
+    public function index(Request $request, Workspace $workspace): JsonResponse
     {
         $user = Auth::user();
 
@@ -23,36 +23,62 @@ class WorkspaceFileController extends Controller
             ], 403);
         }
 
-        $files = $workspace->files()
-            ->with('uploadedBy')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($file) {
-                return [
-                    'id' => $file->id,
-                    'name' => $file->name,
-                    'original_name' => $file->original_name,
-                    'file_size' => $file->file_size,
-                    'file_size_formatted' => $file->getFileSizeFormatted(),
-                    'mime_type' => $file->mime_type,
-                    'is_tiff' => $file->isTiff(),
-                    'has_geospatial_data' => $file->hasGeospatialData(),
-                    'coordinates' => $file->getCoordinatesArray(),
-                    'is_processed' => $file->is_processed,
-                    'processing_notes' => $file->processing_notes,
-                    'metadata' => $file->metadata,
-                    'uploaded_by' => [
-                        'id' => $file->uploadedBy->id,
-                        'name' => $file->uploadedBy->name,
-                    ],
-                    'created_at' => $file->created_at,
-                    'updated_at' => $file->updated_at,
-                ];
-            });
+        // Pagination and filters
+        $perPage = max(1, min(100, intval($request->get('per_page', 20))));
+        $page = max(1, intval($request->get('page', 1)));
+        $hasCoordinates = $request->boolean('has_coordinates', false);
+        $include = array_filter(explode(',', $request->get('include', '')));
+
+        $query = $workspace->files()->with('uploadedBy')->orderBy('created_at', 'desc');
+
+        if ($hasCoordinates) {
+            // Use geospatial_bounds as an indicator of coordinates present
+            $query = $query->whereNotNull('geospatial_bounds');
+        }
+
+        $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $files = $paginated->getCollection()->map(function ($file) use ($include) {
+            $base = [
+                'id' => $file->id,
+                'name' => $file->name,
+                'original_name' => $file->original_name,
+                'file_size' => $file->file_size,
+                'file_size_formatted' => $file->getFileSizeFormatted(),
+                'mime_type' => $file->mime_type,
+                'is_tiff' => $file->isTiff(),
+                'has_geospatial_data' => $file->hasGeospatialData(),
+                'is_processed' => $file->is_processed,
+                'uploaded_by' => [
+                    'id' => $file->uploadedBy->id,
+                    'name' => $file->uploadedBy->name,
+                ],
+                'created_at' => $file->created_at,
+                'updated_at' => $file->updated_at,
+            ];
+
+            if (in_array('coordinates', $include)) {
+                $base['coordinates'] = $file->getCoordinatesArray();
+            }
+
+            if (in_array('metadata', $include)) {
+                $base['metadata'] = $file->metadata;
+            }
+
+            return $base;
+        })->toArray();
 
         return response()->json([
             'success' => true,
-            'data' => $files,
+            'data' => [
+                'files' => $files,
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                    'last_page' => $paginated->lastPage(),
+                ],
+            ],
         ]);
     }
 
@@ -200,6 +226,8 @@ class WorkspaceFileController extends Controller
 
         return Storage::disk('private')->download($file->file_path, $file->original_name);
     }
+
+    
 
     public function update(Request $request, Workspace $workspace, WorkspaceFile $file): JsonResponse
     {

@@ -59,6 +59,9 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     // Estados para imágenes
     const [images, setImages] = useState<WorkspaceImage[]>([]);
     const [imagesLoading, setImagesLoading] = useState(false);
+    const [filesLoading, setFilesLoading] = useState(false);
+    const [filesMeta, setFilesMeta] = useState<{ current_page: number; per_page: number; total: number; last_page: number } | null>(null);
+    const [filesPage, setFilesPage] = useState(1);
     const [showImageUploadModal, setShowImageUploadModal] = useState(false);
     const [showImageViewModal, setShowImageViewModal] = useState(false);
     const [showImageEditModal, setShowImageEditModal] = useState(false);
@@ -73,6 +76,19 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         loadWorkspace();
         loadImages(); // Cargar imágenes siempre al cargar el workspace
     }, [workspaceId]);
+
+    // Cargar archivos cuando se entra a la pestaña 'files' y aún no han sido cargados
+    useEffect(() => {
+        if (activeTab !== 'files') return;
+        // Si ya tenemos archivos cargados o estamos en medio de una carga, no hacer nada
+        if (filesLoading) return;
+        if (workspace && workspace.files && workspace.files.length > 0) return;
+
+        // Cargar primeros 50 archivos
+        loadFiles();
+        // We intentionally depend on activeTab and workspace?.files?.length (indirect) to avoid
+        // running this effect every time the workspace object identity changes.
+    }, [activeTab, filesLoading, workspace?.files?.length]);
 
     useEffect(() => {
         // Recargar imágenes solo cuando se cambia específicamente a la pestaña de imágenes
@@ -105,6 +121,29 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
             console.error('Error loading images:', err);
         } finally {
             setImagesLoading(false);
+        }
+    };
+
+    const loadFiles = async (page = 1, perPage = 20) => {
+        try {
+            setFilesLoading(true);
+            const data = await workspaceApi.getFiles(workspaceId, { page, per_page: perPage });
+            // data: { files, meta }
+            setFilesMeta(data.meta || null);
+
+            setWorkspace(prev => {
+                if (!prev) return prev;
+                const existing = prev.files || [];
+                // If loading first page replace, otherwise append
+                const newFiles = page === 1 ? data.files : [...existing, ...data.files];
+                return { ...prev, files: newFiles };
+            });
+
+            setFilesPage(page);
+        } catch (err) {
+            console.error('Error loading files:', err);
+        } finally {
+            setFilesLoading(false);
         }
     };
 
@@ -169,14 +208,21 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
             );
 
             // Actualizar el workspace con el archivo modificado
-            setWorkspace(prev => prev ? {
-                ...prev,
-                files: prev.files.map(f => 
-                    f.id === selectedFileForEdit.id 
-                        ? { ...f, name: newName, processing_notes: notes || undefined }
-                        : f
-                )
-            } : null);
+            setWorkspace(prev => {
+                if (!prev) return null;
+                if (!prev.files) {
+                    // Files not loaded yet; nothing to update in list. Keep workspace as-is.
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    files: prev.files.map(f => 
+                        f.id === selectedFileForEdit.id 
+                            ? { ...f, name: newName, processing_notes: notes || undefined }
+                            : f
+                    )
+                };
+            });
 
             setShowEditModal(false);
             setSelectedFileForEdit(null);
@@ -213,8 +259,15 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     };
 
     const handleImageDelete = (image: WorkspaceImage) => {
-        setSelectedImageForDelete(image);
-        setShowImageDeleteModal(true);
+        // Cerrar el modal de vista primero
+        setShowImageViewModal(false);
+        setSelectedImageForView(null);
+        
+        // Abrir el modal de eliminación después de un breve delay
+        setTimeout(() => {
+            setSelectedImageForDelete(image);
+            setShowImageDeleteModal(true);
+        }, 100);
     };
 
     const handleImageEditSuccess = (updatedImage: WorkspaceImage) => {
@@ -298,22 +351,15 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                 <div className="flex items-center gap-2">
                     {canEdit && (
                         <>
-                            <button
-                                onClick={() => activeTab === 'files' ? setShowUploadModal(true) : setShowImageUploadModal(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                            >
-                                {activeTab === 'files' ? (
-                                    <>
-                                        <Upload className="w-4 h-4" />
-                                        Subir Archivo
-                                    </>
-                                ) : (
-                                    <>
-                                        <Camera className="w-4 h-4" />
-                                        Subir Imagen
-                                    </>
-                                )}
-                            </button>
+                            {activeTab === 'images' ? (
+                                <button
+                                    onClick={() => setShowImageUploadModal(true)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                                >
+                                    <Camera className="w-4 h-4" />
+                                    Subir Imagen
+                                </button>
+                            ) : null}
                         </>
                     )}
                     
@@ -340,9 +386,9 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
                     >
-                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4" />
-                            Archivos ({workspace.files.length})
+                            Archivos ({workspace.files_count})
                         </div>
                     </button>
                     <button
@@ -361,62 +407,33 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                 </nav>
             </div>
 
-            {/* Workspace Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 text-blue-700 mb-1">
-                        <FileText className="w-5 h-5" />
-                        <span className="font-medium">Archivos</span>
-                    </div>
-                    <p className="text-2xl font-bold text-blue-900">{workspace.files.length}</p>
-                </div>
-
-                <div className="bg-purple-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 text-purple-700 mb-1">
-                        <ImageIcon className="w-5 h-5" />
-                        <span className="font-medium">Imágenes</span>
-                    </div>
-                    <p className="text-2xl font-bold text-purple-900">{images.length}</p>
-                </div>
-
-                {workspace.type === 'shared' && (
-                    <div className="bg-green-50 p-4 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-700 mb-1">
-                            <Users className="w-5 h-5" />
-                            <span className="font-medium">Miembros</span>
-                        </div>
-                        <p className="text-2xl font-bold text-green-900">{workspace.members.length}</p>
-                    </div>
-                )}
-            </div>
+            {/* Workspace Info (removed summary cards) */}
 
             {/* Contenido según pestaña activa */}
             {activeTab === 'files' ? (
                 /* Files Section */
                 <div>
-                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-gray-900">Archivos</h2>
-                        {workspace.files.length > 0 && (
+                        {workspace.files_count > 0 && (
                             <div className="text-sm text-gray-500">
-                                {workspace.files.length} archivo{workspace.files.length !== 1 ? 's' : ''}
+                                {workspace.files_count} archivo{workspace.files_count !== 1 ? 's' : ''}
                             </div>
                         )}
                     </div>
 
-                    {workspace.files.length === 0 ? (
+                    {filesLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                        </div>
+                    ) : !workspace.files || workspace.files.length === 0 ? (
                         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                             <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                             <p className="text-gray-600 mb-2">No hay archivos en este espacio</p>
-                            {canEdit && (
-                                <button
-                                    onClick={() => setShowUploadModal(true)}
-                                    className="text-indigo-600 hover:text-indigo-800 underline"
-                                >
-                                    Subir el primer archivo
-                                </button>
-                            )}
+                            {/** Intentionally hide upload/link when on Files tab per UX requirement **/}
                         </div>
                     ) : (
+                        <>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {workspace.files.map(file => (
                                 <FileCard
@@ -424,12 +441,36 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                                     file={file}
                                     canEdit={canEdit || false}
                                     onDownload={() => handleFileDownload(file.id)}
+                                    onDownloadWithMeta={async () => {
+                                        const { toast } = await import('sonner');
+                                        const id = toast.loading('Preparando descarga — procesando y comprimiendo...');
+                                        try {
+                                            await workspaceApi.downloadFileWithMetadata(workspaceId, file.id);
+                                            toast.success('Descarga lista — el archivo debería comenzar en breve', { id });
+                                        } catch (err) {
+                                            console.error('Error downloading file with metadata:', err);
+                                            toast.error('Error al descargar con metadatos', { id });
+                                        }
+                                    }}
                                     onDelete={() => handleFileDelete(file.id)}
                                     onPreviewAreas={() => handlePreviewAreas(file)}
                                     onEdit={() => handleEditFile(file)}
                                 />
                             ))}
                         </div>
+
+                        {filesMeta && filesMeta.current_page < filesMeta.last_page && (
+                            <div className="mt-6 flex justify-center">
+                                <button
+                                    onClick={() => loadFiles(filesMeta.current_page + 1, filesMeta.per_page)}
+                                    className="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200"
+                                    disabled={filesLoading}
+                                >
+                                    {filesLoading ? 'Cargando...' : 'Cargar más'}
+                                </button>
+                            </div>
+                        )}
+                        </>
                     )}
                 </div>
             ) : (

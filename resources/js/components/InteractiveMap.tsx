@@ -65,6 +65,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
     const [saveTitle, setSaveTitle] = useState('');
     const [saveDescription, setSaveDescription] = useState('');
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+    const [isUploadingToWorkspace, setIsUploadingToWorkspace] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     // Map initialization
     useEffect(() => {
@@ -516,6 +518,138 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
         }
     };
 
+    // Listen for external load-coordinates events (from the upload panel)
+    useEffect(() => {
+        const handler = (ev: any) => {
+            try {
+                const detail = ev.detail;
+                const coordinateData = detail?.coordinateData;
+
+                if (!coordinateData) return;
+                if (!mapRef.current) {
+                    console.warn('Map not initialized yet, skipping external coordinate load');
+                    return;
+                }
+
+                console.log('Received external coordinate load:', detail);
+
+                // Ensure drawnItemsRef exists and is attached to map
+                if (!drawnItemsRef.current) {
+                    drawnItemsRef.current = new L.FeatureGroup();
+                    mapRef.current.addLayer(drawnItemsRef.current);
+                }
+
+                // Clear previous layers safely
+                try {
+                    drawnItemsRef.current.clearLayers();
+                } catch (e) {
+                    console.warn('Could not clear drawnItemsRef layers', e);
+                }
+                setSelectedAreas([]);
+
+                // Helper to sanitize coordinate arrays into [lat:number, lng:number]
+                const sanitizeCoords = (coords: any[]): number[][] => {
+                    const out: number[][] = [];
+                    for (const c of coords) {
+                        if (!Array.isArray(c) || c.length < 2) continue;
+                        const lat = Number(c[0]);
+                        const lng = Number(c[1]);
+                        if (!isFinite(lat) || !isFinite(lng)) continue;
+                        out.push([lat, lng]);
+                    }
+                    return out;
+                };
+
+                if (coordinateData.type === 'polygon' && Array.isArray(coordinateData.coordinates)) {
+                    const rawCoords = coordinateData.coordinates;
+                    const coords = sanitizeCoords(rawCoords);
+                    if (coords.length < 3) {
+                        console.warn('Sanitized coordinates are insufficient for polygon:', coords);
+                        return;
+                    }
+
+                    const coordsTuples = coords.map((c: number[]) => [c[0], c[1]] as [number, number]);
+                    let polygon: L.Polygon | null = null;
+                    try {
+                        polygon = L.polygon(coordsTuples, {
+                            color: '#97009c',
+                            weight: 3,
+                            opacity: 0.8,
+                            fillOpacity: 0.3,
+                        }).addTo(drawnItemsRef.current as L.FeatureGroup);
+                    } catch (e) {
+                        console.error('Error creating polygon on map', e);
+                        return;
+                    }
+
+                    const polygonLatLngs = (polygon.getLatLngs()[0] || []) as L.LatLng[];
+                    const area = L.GeometryUtil ? L.GeometryUtil.geodesicArea(polygonLatLngs) : calculateArea(coords);
+
+                    const selectedArea = {
+                        type: 'polygon',
+                        coordinates: coords,
+                        area: area
+                    };
+                    setSelectedAreas([selectedArea]);
+                    if (onAreaSelected) onAreaSelected(selectedArea);
+
+                    try {
+                        const bounds = L.latLngBounds(coordsTuples as [number, number][]);
+                        mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+                    } catch (e) {
+                        console.warn('Could not fit bounds to polygon', e);
+                    }
+
+                    try {
+                        setGeoJson({
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Polygon',
+                                coordinates: [coords.map((coord: any) => [coord[1], coord[0]])]
+                            },
+                            properties: {}
+                        });
+                    } catch (e) {
+                        console.warn('Could not set GeoJSON safely', e);
+                    }
+
+                } else if (coordinateData.type === 'marker' && coordinateData.center) {
+                    const lat = Number(coordinateData.center.lat);
+                    const lng = Number(coordinateData.center.lng);
+                    if (!isFinite(lat) || !isFinite(lng)) {
+                        console.warn('Invalid marker coordinates received', coordinateData.center);
+                        return;
+                    }
+
+                    try {
+                        const marker = L.marker([lat, lng]).addTo(drawnItemsRef.current as L.FeatureGroup);
+                        marker.bindPopup(`<strong>Ubicación cargada:</strong> ${detail.fileName || detail.fileId}`);
+
+                        const selectedArea = {
+                            type: 'marker',
+                            coordinates: [[lat, lng]]
+                        };
+                        setSelectedAreas([selectedArea]);
+                        if (onAreaSelected) onAreaSelected(selectedArea);
+
+                        try {
+                            mapRef.current.setView([lat, lng], coordinateData.center.zoom || 15);
+                        } catch (e) {
+                            console.warn('Could not set map view to marker', e);
+                        }
+                    } catch (e) {
+                        console.error('Error adding marker to map', e);
+                    }
+                }
+            } catch (error) {
+                console.error('Error handling external coordinates', error);
+            }
+        };
+
+        window.addEventListener('deepcrop:load-coordinates', handler as EventListener);
+        return () => window.removeEventListener('deepcrop:load-coordinates', handler as EventListener);
+    }, [onAreaSelected]);
+
     const generateAreaPreview = async (): Promise<string> => {
         return new Promise((resolve, reject) => {
             try {
@@ -629,12 +763,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
             };
 
             // Subir el archivo al workspace con metadata
-            await workspaceApi.uploadFile(workspaceId, { 
-                file, 
-                name: saveTitle.trim(),
-                metadata: JSON.stringify(metadata)
-            });
+            setUploadProgress(0);
+            setIsUploadingToWorkspace(true);
+            await workspaceApi.uploadFile(
+                workspaceId,
+                {
+                    file,
+                    name: saveTitle.trim(),
+                    metadata: JSON.stringify(metadata)
+                },
+                (progressEvent: ProgressEvent) => {
+                    if (progressEvent.lengthComputable) {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        setUploadProgress(percentCompleted);
+                    }
+                }
+            );
 
+            setIsUploadingToWorkspace(false);
             setShowSaveModal(false);
             setSaveTitle('');
             setSaveDescription('');
@@ -1003,6 +1149,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                 onDescriptionChange={setSaveDescription}
                 onSave={handleSaveToWorkspace}
                 onCancel={handleCancelSave}
+                isUploading={isUploadingToWorkspace}
+                uploadProgress={uploadProgress}
             />
         </div>
     );

@@ -52,7 +52,7 @@ export const DeleteImageModal: React.FC<DeleteImageModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" style={{zIndex: 1500}}>
                 <DialogHeader>
                     <div className="flex items-center gap-3">
                         <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">

@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Exception;
 
@@ -303,12 +304,110 @@ class ImageStorageService
      */
     private function processImageAsync(WorkspaceImage $image): void
     {
-        // Aquí podrías usar queues para procesar la imagen
-        // Por ahora, marcaremos como procesada
-        $image->update([
-            'is_processed' => true,
-            'processing_notes' => 'Procesamiento básico completado'
-        ]);
+        // Procesamiento ligero en línea: crear thumbnail y extraer coordenadas si es posible
+        try {
+            $thumbnailPath = $this->createAndStoreThumbnail($image);
+
+            $update = ['is_processed' => true, 'processing_notes' => 'Procesamiento básico completado'];
+            if ($thumbnailPath) {
+                $update['thumbnail_path'] = $thumbnailPath;
+            }
+
+            // Aquí podríamos intentar extraer coordenadas avanzadas en background;
+            // por ahora confiamos en metadata ya extraída.
+
+            $image->update($update);
+
+        } catch (Exception $e) {
+            // Never fail the upload if thumbnail generation fails
+            Log::warning('Thumbnail generation failed for image ' . $image->_id . ': ' . $e->getMessage());
+            $image->update(['is_processed' => false, 'processing_notes' => 'Thumbnail generation failed: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Create a thumbnail for the image and store it in the disk. Returns thumbnail path or null.
+     */
+    private function createAndStoreThumbnail(WorkspaceImage $image): ?string
+    {
+        try {
+            if (!Storage::disk($this->disk)->exists($image->file_path)) {
+                throw new Exception('Original file not found for thumbnail generation');
+            }
+
+            $stream = Storage::disk($this->disk)->readStream($image->file_path);
+            if (!$stream) {
+                throw new Exception('Failed to read original file stream');
+            }
+
+            $contents = stream_get_contents($stream);
+            fclose($stream);
+
+            $maxDim = 400; // max thumbnail dimension
+
+            // Try Imagick
+            if (extension_loaded('imagick')) {
+                try {
+                    $im = new \Imagick();
+                    $im->readImageBlob($contents);
+                    $im->setImageFormat('jpeg');
+                    $im->setImageCompressionQuality(80);
+
+                    $width = $im->getImageWidth();
+                    $height = $im->getImageHeight();
+                    $ratio = min(1, $maxDim / max($width, $height));
+                    if ($ratio < 1) {
+                        $im->resizeImage((int)($width * $ratio), (int)($height * $ratio), \Imagick::FILTER_LANCZOS, 1);
+                    }
+
+                    $jpeg = $im->getImageBlob();
+                    $im->destroy();
+                } catch (Exception $e) {
+                    // fallback to GD
+                    $jpeg = null;
+                }
+            } else {
+                $jpeg = null;
+            }
+
+            // Fallback to GD
+            if ($jpeg === null && extension_loaded('gd')) {
+                $img = @imagecreatefromstring($contents);
+                if ($img !== false) {
+                    $width = imagesx($img);
+                    $height = imagesy($img);
+                    $ratio = min(1, $maxDim / max($width, $height));
+                    $newW = (int)($width * $ratio);
+                    $newH = (int)($height * $ratio);
+
+                    $thumb = imagecreatetruecolor($newW, $newH);
+                    // Preserve transparency for PNG
+                    imagealphablending($thumb, false);
+                    imagesavealpha($thumb, true);
+                    imagecopyresampled($thumb, $img, 0, 0, 0, 0, $newW, $newH, $width, $height);
+
+                    ob_start();
+                    imagejpeg($thumb, null, 80);
+                    $jpeg = ob_get_clean();
+                    imagedestroy($thumb);
+                    imagedestroy($img);
+                }
+            }
+
+            if (empty($jpeg)) {
+                // Can't generate thumbnail
+                return null;
+            }
+
+            // Build thumbnail path and store
+            $thumbPath = preg_replace('/\/([^\/]+)$/', '/thumbnails/$1', $image->file_path);
+            // Ensure thumbnails directory exists; put will create it
+            Storage::disk($this->disk)->put($thumbPath, $jpeg);
+
+            return $thumbPath;
+        } catch (Exception $e) {
+            throw $e;
+        }
     }
 
     /**

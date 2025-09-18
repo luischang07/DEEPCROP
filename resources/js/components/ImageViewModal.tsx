@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { WorkspaceImage } from '@/types/workspace';
 import { imageApi } from '@/services/imageApi';
+import { workspaceApi } from '@/services/workspaceApi';
 
 interface ImageViewModalProps {
     workspaceId: string;
@@ -62,18 +63,11 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
 
     const handleDownload = async () => {
         try {
-            const response = await imageApi.download(workspaceId, image.id);
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = image.original_name;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+            await imageApi.downloadImage(workspaceId, image.id);
         } catch (error) {
             console.error('Error downloading image:', error);
+            // Mostrar un mensaje de error al usuario
+            alert('Error al descargar la imagen. Por favor, intenta de nuevo.');
         }
     };
 
@@ -133,7 +127,8 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
                 sx: {
                     height: '90vh',
                     maxHeight: '90vh',
-                    m: 2
+                    m: 2,
+                    zIndex: 1300
                 }
             }}
         >
@@ -161,6 +156,24 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
                         onClick={handleDownload}
                     >
                         Descargar
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<DownloadIcon />}
+                        onClick={async () => {
+                            const { toast } = await import('sonner');
+                            const id = toast.loading('Preparando descarga — procesando y comprimiendo...');
+                            try {
+                                await workspaceApi.downloadFileWithMetadata(workspaceId, image.id);
+                                toast.success('Descarga lista — el archivo debería comenzar en breve', { id });
+                            } catch (error) {
+                                console.error('Error downloading image with metadata:', error);
+                                toast.error('Error al descargar con metadatos.', { id });
+                            }
+                        }}
+                    >
+                        Descargar con metadatos
                     </Button>
                     {image.can_edit && (
                         <Button

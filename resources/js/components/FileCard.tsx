@@ -5,7 +5,8 @@ import { WorkspaceFile } from '../types/workspace';
 interface FileCardProps {
     file: WorkspaceFile;
     canEdit: boolean;
-    onDownload: () => void;
+    onDownload?: () => void;
+    onDownloadWithMeta?: () => void;
     onDelete: () => void;
     onPreviewAreas?: () => void;
     onEdit?: () => void;
@@ -15,22 +16,52 @@ export const FileCard: React.FC<FileCardProps> = ({
     file,
     canEdit,
     onDownload,
+    onDownloadWithMeta,
     onDelete,
     onPreviewAreas,
     onEdit
 }) => {
     const getFileIcon = () => {
-        if (file.is_tiff) {
+        // Intentar determinar la extensión real
+        const ext = (file.original_name || '').split('.').pop()?.toLowerCase();
+        const imageExts = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+        const tiffExts = ['tif', 'tiff'];
+
+        if (file.is_tiff || (ext && tiffExts.includes(ext))) {
             return <Map className="w-8 h-8 text-green-600" />;
         }
+
+        if (ext && imageExts.includes(ext)) {
+            // pequeño thumbnail inline (SVG) para imágenes
+            return (
+                <svg className="w-8 h-8 rounded bg-gray-100 p-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="24" height="24" rx="4" fill="#f3f4f6" />
+                    <path d="M6 15l3-4 2 3 3-4 4 6H6z" fill="#60a5fa" />
+                </svg>
+            );
+        }
+
         return <FileText className="w-8 h-8 text-blue-600" />;
     };
 
     const getFileTypeLabel = () => {
-        if (file.is_tiff) {
+        // Preferir la extensión en original_name si está disponible
+        const ext = (file.original_name || '').split('.').pop()?.toLowerCase();
+        const subtype = (file.mime_type || '').split('/')[1] || '';
+
+        if (file.is_tiff || (ext && (ext === 'tif' || ext === 'tiff'))) {
             return file.has_geospatial_data ? 'GeoTIFF' : 'TIFF';
         }
-        return file.mime_type.split('/')[1].toUpperCase();
+
+        if (ext) {
+            // Normalizar jpg/jpeg
+            if (ext === 'jpeg') return 'JPG';
+            return ext.toUpperCase();
+        }
+
+        if (subtype) return subtype.toUpperCase();
+
+        return 'FILE';
     };
 
     const hasSelectedAreas = () => {
@@ -67,13 +98,24 @@ export const FileCard: React.FC<FileCardProps> = ({
                             <MapPin className="w-4 h-4" />
                         </button>
                     )}
-                    <button
-                        onClick={onDownload}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Descargar"
-                    >
-                        <Download className="w-4 h-4" />
-                    </button>
+                    {onDownload && (
+                        <button
+                            onClick={onDownload}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                            title="Descargar"
+                        >
+                            <Download className="w-4 h-4" />
+                        </button>
+                    )}
+                    {onDownloadWithMeta && (
+                        <button
+                            onClick={onDownloadWithMeta}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors"
+                            title="Descargar con metadatos"
+                        >
+                            <FileText className="w-4 h-4" />
+                        </button>
+                    )}
                     {canEdit && onEdit && (
                         <button
                             onClick={onEdit}
@@ -99,17 +141,28 @@ export const FileCard: React.FC<FileCardProps> = ({
             <div className="space-y-2">
                 {/* Type and Size */}
                 <div className="flex items-center justify-between">
-                    <span className={`
-                        px-2 py-1 text-xs font-medium rounded-full
-                        ${file.is_tiff 
-                            ? file.has_geospatial_data 
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            : 'bg-blue-100 text-blue-800'
+                    {(() => {
+                        const label = getFileTypeLabel();
+                        // Determinar clase por categoría
+                        const imgExts = ['PNG','JPG','JPEG','WEBP','GIF'];
+                        const geoLabel = label.toUpperCase().includes('GEO') || label === 'GEOTIFF';
+                        const tiffLabel = label === 'TIFF' || label === 'GEOTIFF';
+                        let chipClass = 'bg-gray-100 text-gray-800';
+
+                        if (tiffLabel) {
+                            chipClass = file.has_geospatial_data ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                        } else if (imgExts.includes(label)) {
+                            chipClass = 'bg-blue-100 text-blue-800';
+                        } else if (geoLabel) {
+                            chipClass = 'bg-green-100 text-green-800';
                         }
-                    `}>
-                        {getFileTypeLabel()}
-                    </span>
+
+                        return (
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${chipClass}`}>
+                                {label}
+                            </span>
+                        );
+                    })()}
                     <span className="text-sm text-gray-500">{file.file_size_formatted}</span>
                 </div>
 

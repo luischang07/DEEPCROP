@@ -98,4 +98,16 @@ return [
         public_path('storage') => storage_path('app/public'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Limits
+    |--------------------------------------------------------------------------
+    |
+    | Maximum file size for image uploads (in bytes)
+    | Default: 100MB (100 * 1024 * 1024)
+    |
+    */
+
+    'max_image_size' => env('MAX_IMAGE_SIZE', 100 * 1024 * 1024), // 100MB
+
 ];

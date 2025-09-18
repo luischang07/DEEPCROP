@@ -14,22 +14,32 @@ class ImageCacheService {
         return null;
     }
 
-    cacheUrl(imageId: string, workspaceId: string, retryCount: number = 0): string {
-        const key = `${workspaceId}-${imageId}`;
+    /**
+     * Cache a URL for an image. If baseUrl is provided, use it instead of constructing the default download preview URL.
+     */
+    cacheUrl(imageId: string, workspaceId: string, retryCount: number = 0, baseUrl?: string): string {
+        const key = `${workspaceId}-${imageId}${baseUrl ? '-thumb' : ''}`;
         const timestamp = Date.now();
-        const url = `/api/workspaces/${workspaceId}/images/${imageId}/download?preview=true&t=${timestamp}${retryCount > 0 ? `&retry=${retryCount}` : ''}`;
-        
+        let url: string;
+
+        if (baseUrl) {
+            // Append timestamp and retry params safely
+            url = baseUrl + (baseUrl.includes('?') ? `&t=${timestamp}` : `?t=${timestamp}`) + (retryCount > 0 ? `&retry=${retryCount}` : '');
+        } else {
+            url = `/api/workspaces/${workspaceId}/images/${imageId}/download?preview=true&t=${timestamp}${retryCount > 0 ? `&retry=${retryCount}` : ''}`;
+        }
+
         this.cache.set(key, {
             url,
             timestamp,
             retries: retryCount
         });
-        
+
         return url;
     }
 
     shouldRetry(imageId: string, workspaceId: string): boolean {
-        const key = `${workspaceId}-${imageId}`;
+           const key = `${workspaceId}-${imageId}`;
         const cached = this.cache.get(key);
         
         return !cached || cached.retries < this.MAX_RETRIES;

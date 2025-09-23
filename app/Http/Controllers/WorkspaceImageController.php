@@ -44,13 +44,18 @@ class WorkspaceImageController extends Controller
                 $request->input('name'),
                 $request->input('tags', [])
             );
+            //ORB, CORS.
+            $thumbnailUrl = $image->getThumbnailUrl(60);
+            if (!$thumbnailUrl) {
+                $thumbnailUrl = url("/api/workspaces/{$workspace->_id}/images/{$image->_id}/download?preview=1");
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Imagen subida exitosamente',
                 'data' => array_merge($image->toArray(), [
                     'download_url' => $image->getTemporaryUrl(60),
-                    'thumbnail_url' => $image->getThumbnailUrl(60),
+                    'thumbnail_url' => $thumbnailUrl,
                     'formatted_size' => $image->getFileSizeFormatted(),
                     'coordinates' => $image->getCoordinatesArray(),
                 ])
@@ -131,11 +136,16 @@ class WorkspaceImageController extends Controller
 
             $image->load('uploadedBy:_id,name,email');
 
+            $thumbnailUrl = $image->getThumbnailUrl(60);
+            if (!$thumbnailUrl) {
+                $thumbnailUrl = url("/api/workspaces/{$workspace->_id}/images/{$image->_id}/download?preview=1");
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => array_merge($image->toArray(), [
                     'download_url' => $image->getTemporaryUrl(60),
-                    'thumbnail_url' => $image->getThumbnailUrl(60),
+                    'thumbnail_url' => $thumbnailUrl,
                     'formatted_size' => $image->getFileSizeFormatted(),
                     'coordinates' => $image->getCoordinatesArray(),
                     'can_edit' => $image->canEdit($request->user()),
@@ -187,12 +197,17 @@ class WorkspaceImageController extends Controller
                 $request->only(['name', 'tags', 'center_lat', 'center_lng'])
             );
 
+            $thumbnailUrl = $updatedImage->getThumbnailUrl(60);
+            if (!$thumbnailUrl) {
+                $thumbnailUrl = url("/api/workspaces/{$workspace->_id}/images/{$updatedImage->_id}/download?preview=1");
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Imagen actualizada exitosamente',
                 'data' => array_merge($updatedImage->toArray(), [
                     'download_url' => $updatedImage->getTemporaryUrl(60),
-                    'thumbnail_url' => $updatedImage->getThumbnailUrl(60),
+                    'thumbnail_url' => $thumbnailUrl,
                     'formatted_size' => $updatedImage->getFileSizeFormatted(),
                     'coordinates' => $updatedImage->getCoordinatesArray(),
                 ])

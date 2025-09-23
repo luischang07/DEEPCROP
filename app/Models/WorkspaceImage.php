@@ -52,12 +52,23 @@ class WorkspaceImage extends Model
     /**
      * Obtener URL temporal para descargar la imagen desde MinIO
      */
-    public function getTemporaryUrl(int $minutes = 60): string
+    public function getTemporaryUrl(int $minutes = 60): ?string
     {
-        return Storage::disk('minio')->temporaryUrl(
-            $this->file_path,
-            now()->addMinutes($minutes)
-        );
+        try {
+            if (!Storage::disk('minio')->exists($this->file_path)) {
+                // Original file missing: avoid generating a signed URL that will return HTML/error
+                \Log::warning('Temporary URL requested for missing file: ' . $this->file_path);
+                return null;
+            }
+
+            return Storage::disk('minio')->temporaryUrl(
+                $this->file_path,
+                now()->addMinutes($minutes)
+            );
+        } catch (\Exception $e) {
+            \Log::warning('Failed to generate temporary URL for ' . $this->file_path . ': ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -68,11 +79,20 @@ class WorkspaceImage extends Model
         if (!$this->thumbnail_path) {
             return null;
         }
+        try {
+            if (!Storage::disk('minio')->exists($this->thumbnail_path)) {
+                \Log::warning('Thumbnail requested but not found: ' . $this->thumbnail_path);
+                return null;
+            }
 
-        return Storage::disk('minio')->temporaryUrl(
-            $this->thumbnail_path,
-            now()->addMinutes($minutes)
-        );
+            return Storage::disk('minio')->temporaryUrl(
+                $this->thumbnail_path,
+                now()->addMinutes($minutes)
+            );
+        } catch (\Exception $e) {
+            \Log::warning('Failed to generate thumbnail URL for ' . $this->thumbnail_path . ': ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**

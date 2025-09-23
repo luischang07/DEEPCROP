@@ -7,7 +7,6 @@ import {
     Typography,
     Button,
     IconButton,
-    Grid,
     Paper,
     Chip,
     Divider,
@@ -157,24 +156,6 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
                     >
                         Descargar
                     </Button>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<DownloadIcon />}
-                        onClick={async () => {
-                            const { toast } = await import('sonner');
-                            const id = toast.loading('Preparando descarga — procesando y comprimiendo...');
-                            try {
-                                await workspaceApi.downloadFileWithMetadata(workspaceId, image.id);
-                                toast.success('Descarga lista — el archivo debería comenzar en breve', { id });
-                            } catch (error) {
-                                console.error('Error downloading image with metadata:', error);
-                                toast.error('Error al descargar con metadatos.', { id });
-                            }
-                        }}
-                    >
-                        Descargar con metadatos
-                    </Button>
                     {image.can_edit && (
                         <Button
                             variant="outlined"
@@ -203,20 +184,35 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
             </DialogTitle>
 
             <DialogContent sx={{ p: 0, height: '100%', display: 'flex', overflow: 'hidden' }}>
-                <Grid container sx={{ height: '100%' }}>
+                <Box sx={{ 
+                    display: 'flex', 
+                    height: '100%', 
+                    width: '100%',
+                    flexDirection: { xs: 'column', md: 'row' }
+                }}>
                     {/* Área de imagen */}
-                    <Grid item xs={12} md={8} sx={{ height: '100%' }}>
+                    <Box sx={{ 
+                        flex: { xs: '1 1 60%', md: '1 1 66.666%' },
+                        height: { xs: 'auto', md: '100%' },
+                        minHeight: { xs: 400, md: 0 },
+                        display: 'flex', 
+                        flexDirection: 'column'
+                    }}>
                         <Box sx={{ 
                             p: 3, 
                             height: '100%', 
                             bgcolor: 'grey.50',
-                            overflow: 'auto'
+                            overflow: 'auto',
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column'
                         }}>
                             <Paper 
                                 elevation={2} 
                                 sx={{ 
                                     height: '100%', 
-                                    minHeight: 500,
+                                    minHeight: 400,
+                                    flex: 1,
                                     position: 'relative',
                                     overflow: 'hidden',
                                     display: 'flex',
@@ -292,16 +288,26 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
                                 )}
                             </Paper>
                         </Box>
-                    </Grid>
+                    </Box>
 
                     {/* Panel de información */}
-                    <Grid item xs={12} md={4} sx={{ height: '100%' }}>
+                    <Box sx={{ 
+                        flex: { xs: '1 1 40%', md: '1 1 33.333%' },
+                        height: { xs: 'auto', md: '100%' },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0
+                    }}>
                         <Box sx={{ 
                             p: 3, 
                             height: '100%', 
                             overflow: 'auto',
-                            borderLeft: 1,
-                            borderColor: 'divider'
+                            borderLeft: { xs: 0, md: 1 },
+                            borderTop: { xs: 1, md: 0 },
+                            borderColor: 'divider',
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column'
                         }}>
                             {/* Información básica */}
                             <Box sx={{ mb: 3 }}>
@@ -440,8 +446,8 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({
                                 </Box>
                             )}
                         </Box>
-                    </Grid>
-                </Grid>
+                    </Box>
+                </Box>
             </DialogContent>
         </Dialog>
     );

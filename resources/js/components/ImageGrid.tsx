@@ -14,7 +14,6 @@ import {
     ListItemIcon,
     ListItemText,
     Chip,
-    Grid,
     FormControl,
     InputLabel,
     Select,
@@ -348,135 +347,146 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
                     </Typography>
                 </Paper>
             ) : (
-                <Grid container spacing={3}>
+                <Box sx={{ 
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 3,
+                    '& > *': {
+                        flexBasis: {
+                            xs: '100%',
+                            sm: 'calc(50% - 12px)',
+                            lg: 'calc(33.333% - 16px)'
+                        },
+                        flexGrow: 0,
+                        flexShrink: 0
+                    }
+                }}>
                     {filteredImages.map((image) => (
-                        <Grid item xs={12} sm={6} lg={4} key={image.id}>
-                            <Card sx={{ 
-                                height: '100%', 
+                        <Card key={image.id} sx={{ 
+                            height: '100%', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            transition: 'all 0.2s',
+                            '&:hover': {
+                                boxShadow: 6,
+                                transform: 'translateY(-2px)'
+                            }
+                        }}>
+                            <Box sx={{ 
                                 display: 'flex', 
-                                flexDirection: 'column',
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                    boxShadow: 6,
-                                    transform: 'translateY(-2px)'
-                                }
+                                justifyContent: 'space-between', 
+                                alignItems: 'flex-start',
+                                p: 2,
+                                pb: 1,
+                                gap: 1
                             }}>
                                 <Box sx={{ 
-                                    display: 'flex', 
-                                    justifyContent: 'space-between', 
-                                    alignItems: 'flex-start',
-                                    p: 2,
-                                    pb: 1,
-                                    gap: 1
+                                    flex: 1, 
+                                    minWidth: 0, // Permite que el texto se trunque
+                                    pr: 1 
                                 }}>
-                                    <Box sx={{ 
-                                        flex: 1, 
-                                        minWidth: 0, // Permite que el texto se trunque
-                                        pr: 1 
-                                    }}>
-                                        <Typography 
-                                            variant="h6" 
-                                            noWrap 
-                                            title={image.name}
-                                            sx={{ 
-                                                fontWeight: 600,
-                                                lineHeight: 1.2,
-                                                mb: 0.5 
-                                            }}
-                                        >
-                                            {image.name}
-                                        </Typography>
-                                        <Typography 
-                                            variant="body2" 
-                                            color="text.secondary" 
-                                            noWrap 
-                                            title={image.original_name}
-                                            sx={{ lineHeight: 1.2 }}
-                                        >
-                                            {image.original_name}
-                                        </Typography>
-                                    </Box>
-                                    <IconButton
-                                        size="small"
-                                        onClick={(e) => handleMenuClick(e, image)}
+                                    <Typography 
+                                        variant="h6" 
+                                        noWrap 
+                                        title={image.name}
                                         sx={{ 
-                                            flexShrink: 0, // Nunca se encoge
-                                            ml: 1 
+                                            fontWeight: 600,
+                                            lineHeight: 1.2,
+                                            mb: 0.5 
                                         }}
                                     >
-                                        <MoreVertIcon />
-                                    </IconButton>
+                                        {image.name}
+                                    </Typography>
+                                    <Typography 
+                                        variant="body2" 
+                                        color="text.secondary" 
+                                        noWrap 
+                                        title={image.original_name}
+                                        sx={{ lineHeight: 1.2 }}
+                                    >
+                                        {image.original_name}
+                                    </Typography>
                                 </Box>
-                                
-                                <CardContent sx={{ flexGrow: 1, pt: 0 }}>
-                                    {/* Vista previa de la imagen */}
-                                    <Box sx={{ 
-                                        position: 'relative',
-                                        width: '100%',
-                                        paddingTop: '56.25%', // 16:9 aspect ratio
-                                        mb: 2,
-                                        borderRadius: 1,
-                                        overflow: 'hidden',
-                                        bgcolor: 'grey.100'
-                                    }}>
-                                        <Box sx={{ position: 'absolute', inset: 0 }}>
-                                            <ImageWithRetry
-                                                workspaceId={workspaceId}
-                                                imageId={image.id}
-                                                alt={image.name}
-                                                onImageSelect={() => onImageSelect?.(image)}
-                                                thumbUrl={image.thumbnail_url || null}
-                                                fallbackInfo={{
-                                                    type: image.mime_type.split('/')[1],
-                                                    size: image.formatted_size
-                                                }}
-                                            />
-                                        </Box>
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => handleMenuClick(e, image)}
+                                    sx={{ 
+                                        flexShrink: 0, // Nunca se encoge
+                                        ml: 1 
+                                    }}
+                                >
+                                    <MoreVertIcon />
+                                </IconButton>
+                            </Box>
+                            
+                            <CardContent sx={{ flexGrow: 1, pt: 0 }}>
+                                {/* Vista previa de la imagen */}
+                                <Box sx={{ 
+                                    position: 'relative',
+                                    width: '100%',
+                                    paddingTop: '56.25%', // 16:9 aspect ratio
+                                    mb: 2,
+                                    borderRadius: 1,
+                                    overflow: 'hidden',
+                                    bgcolor: 'grey.100'
+                                }}>
+                                    <Box sx={{ position: 'absolute', inset: 0 }}>
+                                        <ImageWithRetry
+                                            workspaceId={workspaceId}
+                                            imageId={image.id}
+                                            alt={image.name}
+                                            onImageSelect={() => onImageSelect?.(image)}
+                                            thumbUrl={image.thumbnail_url || null}
+                                            fallbackInfo={{
+                                                type: image.mime_type.split('/')[1],
+                                                size: image.formatted_size
+                                            }}
+                                        />
                                     </Box>
+                                </Box>
 
-                                    {/* Metadatos */}
-                                    <Box sx={{ mb: 2 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                            <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                            <Typography variant="body2" color="text.secondary">
-                                                {formatDate(image.created_at)}
-                                            </Typography>
-                                        </Box>
-                                        
-                                        {image.coordinates?.center && (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                                <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {image.coordinates.center.lat.toFixed(4)}, {image.coordinates.center.lng.toFixed(4)}
-                                                </Typography>
-                                            </Box>
-                                        )}
-
-                                        <Typography variant="caption" color="text.secondary">
-                                            Por: {image.uploaded_by.name}
+                                {/* Metadatos */}
+                                <Box sx={{ mb: 2 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            {formatDate(image.created_at)}
                                         </Typography>
                                     </Box>
-
-                                    {/* Tags */}
-                                    {image.tags.length > 0 && (
-                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                            {image.tags.slice(0, 3).map(tag => (
-                                                <Chip key={tag} label={tag} size="small" variant="outlined" />
-                                            ))}
-                                            {image.tags.length > 3 && (
-                                                <Chip 
-                                                    label={`+${image.tags.length - 3}`} 
-                                                    size="small" 
-                                                    variant="outlined" 
-                                                />
-                                            )}
+                                    
+                                    {image.coordinates?.center && (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                            <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                            <Typography variant="body2" color="text.secondary">
+                                                {image.coordinates.center.lat.toFixed(4)}, {image.coordinates.center.lng.toFixed(4)}
+                                            </Typography>
                                         </Box>
                                     )}
-                                </CardContent>
-                            </Card>
-                        </Grid>
+
+                                    <Typography variant="caption" color="text.secondary">
+                                        Por: {image.uploaded_by.name}
+                                    </Typography>
+                                </Box>
+
+                                {/* Tags */}
+                                {image.tags.length > 0 && (
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                        {image.tags.slice(0, 3).map(tag => (
+                                            <Chip key={tag} label={tag} size="small" variant="outlined" />
+                                        ))}
+                                        {image.tags.length > 3 && (
+                                            <Chip 
+                                                label={`+${image.tags.length - 3}`} 
+                                                size="small" 
+                                                variant="outlined" 
+                                            />
+                                        )}
+                                    </Box>
+                                )}
+                            </CardContent>
+                        </Card>
                     ))}
-                </Grid>
+                </Box>
             )}
 
             {/* Menú contextual */}
@@ -511,17 +521,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
                 </MenuItem>
                 
                 {selectedImage?.can_edit && (
-                    <>
-                        <MenuItem onClick={() => {
-                            handleMenuClose();
-                            onImageRename?.(selectedImage!);
-                        }}>
-                            <ListItemIcon>
-                                <EditNoteIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText>Cambiar nombre</ListItemText>
-                        </MenuItem>
-                        
+                    <>                       
                         <MenuItem onClick={() => {
                             handleMenuClose();
                             onImageEdit?.(selectedImage!);
@@ -529,7 +529,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
                             <ListItemIcon>
                                 <EditIcon fontSize="small" />
                             </ListItemIcon>
-                            <ListItemText>Editar metadatos</ListItemText>
+                            <ListItemText>Editar</ListItemText>
                         </MenuItem>
                     </>
                 )}

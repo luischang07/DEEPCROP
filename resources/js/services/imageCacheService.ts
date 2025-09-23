@@ -23,8 +23,17 @@ class ImageCacheService {
         let url: string;
 
         if (baseUrl) {
-            // Append timestamp and retry params safely
-            url = baseUrl + (baseUrl.includes('?') ? `&t=${timestamp}` : `?t=${timestamp}`) + (retryCount > 0 ? `&retry=${retryCount}` : '');
+            // If baseUrl is a presigned S3/MinIO URL (contains AWS signing params),
+            // do NOT append any extra query parameters because that will change
+            // the canonical query string and invalidate the signature (causing 403).
+            const isPresigned = /X-Amz-Signature|X-Amz-Algorithm|X-Amz-Credential/i.test(baseUrl);
+            if (isPresigned) {
+                // Use the presigned URL exactly as returned by the backend.
+                url = baseUrl;
+            } else {
+                // Append timestamp and retry params for same-origin/backend URLs to bust cache.
+                url = baseUrl + (baseUrl.includes('?') ? `&t=${timestamp}` : `?t=${timestamp}`) + (retryCount > 0 ? `&retry=${retryCount}` : '');
+            }
         } else {
             url = `/api/workspaces/${workspaceId}/images/${imageId}/download?preview=true&t=${timestamp}${retryCount > 0 ? `&retry=${retryCount}` : ''}`;
         }

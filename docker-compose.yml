@@ -50,6 +50,29 @@ services:
       timeout: 20s
       retries: 3
 
+  satellite-service:
+    build:
+      context: ./satellite-service
+      dockerfile: Dockerfile
+    container_name: deepcrop-satellite-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./calcium-ember-455119-f6-2fcf0895ae07.json:/app/credentials/gee_service_account.json:ro
+      - ./satellite-service:/app
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gee_service_account.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - deepcrop-network
+
 networks:
   deepcrop-network:
     driver: bridge

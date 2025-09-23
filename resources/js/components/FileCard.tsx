@@ -65,10 +65,17 @@ export const FileCard: React.FC<FileCardProps> = ({
     };
 
     const hasSelectedAreas = () => {
-        return file.metadata && 
-               file.metadata.frontend_data && 
-               file.metadata.frontend_data.selectedAreas && 
-               file.metadata.frontend_data.selectedAreas.length > 0;
+        if (!file.metadata) return false;
+        
+        const checks = [
+            file.metadata.frontend_data?.selectedAreas?.length > 0,
+            file.metadata.selectedAreas?.length > 0,
+            file.metadata.coordinates?.length > 0,
+            file.metadata.areas?.length > 0,
+            file.metadata.geoJson || file.metadata.geometry || file.metadata.polygon
+        ];
+        
+        return checks.some(check => check);
     };
 
     return (
@@ -96,24 +103,6 @@ export const FileCard: React.FC<FileCardProps> = ({
                             title="Ver áreas seleccionadas"
                         >
                             <MapPin className="w-4 h-4" />
-                        </button>
-                    )}
-                    {onDownload && (
-                        <button
-                            onClick={onDownload}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                            title="Descargar"
-                        >
-                            <Download className="w-4 h-4" />
-                        </button>
-                    )}
-                    {onDownloadWithMeta && (
-                        <button
-                            onClick={onDownloadWithMeta}
-                            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors"
-                            title="Descargar con metadatos"
-                        >
-                            <FileText className="w-4 h-4" />
                         </button>
                     )}
                     {canEdit && onEdit && (
@@ -174,13 +163,32 @@ export const FileCard: React.FC<FileCardProps> = ({
                             <span className="font-medium">Áreas Seleccionadas</span>
                         </div>
                         <div className="text-xs text-purple-600 mt-1">
-                            {file.metadata.frontend_data.selectedAreas.length} área{file.metadata.frontend_data.selectedAreas.length !== 1 ? 's' : ''} guardada{file.metadata.frontend_data.selectedAreas.length !== 1 ? 's' : ''}
-                            {file.metadata.frontend_data.totalArea && (
-                                <span> • {file.metadata.frontend_data.totalArea > 1000000 
-                                    ? `${(file.metadata.frontend_data.totalArea / 1000000).toFixed(2)} km²`
-                                    : `${file.metadata.frontend_data.totalArea.toFixed(0)} m²`
-                                }</span>
-                            )}
+                            {(() => {
+                                // Intentar obtener el número de áreas de diferentes estructuras
+                                const areasCount = 
+                                    file.metadata?.frontend_data?.selectedAreas?.length ||
+                                    file.metadata?.selectedAreas?.length ||
+                                    file.metadata?.coordinates?.length ||
+                                    file.metadata?.areas?.length ||
+                                    (file.metadata?.geoJson || file.metadata?.geometry || file.metadata?.polygon ? 1 : 0);
+                                
+                                const totalArea = 
+                                    file.metadata?.frontend_data?.totalArea ||
+                                    file.metadata?.totalArea ||
+                                    file.metadata?.area;
+                                
+                                return (
+                                    <>
+                                        {areasCount} área{areasCount !== 1 ? 's' : ''} guardada{areasCount !== 1 ? 's' : ''}
+                                        {totalArea && (
+                                            <span> • {totalArea > 1000000 
+                                                ? `${(totalArea / 1000000).toFixed(2)} km²`
+                                                : `${totalArea.toFixed(0)} m²`
+                                            }</span>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}

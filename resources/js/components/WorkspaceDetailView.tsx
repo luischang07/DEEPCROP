@@ -127,7 +127,11 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     const loadFiles = async (page = 1, perPage = 20) => {
         try {
             setFilesLoading(true);
-            const data = await workspaceApi.getFiles(workspaceId, { page, per_page: perPage });
+            const data = await workspaceApi.getFiles(workspaceId, { 
+                page, 
+                per_page: perPage,
+                include: ['metadata', 'coordinates']
+            });
             // data: { files, meta }
             setFilesMeta(data.meta || null);
 

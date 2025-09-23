@@ -68,8 +68,10 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({
             setSelectedWorkspaceId(workspaceIdToLoad);
 
             if (workspaceIdToLoad) {
-                const filesResp = await workspaceApi.getFiles(workspaceIdToLoad);
-                const filesArr = Array.isArray(filesResp) ? filesResp : (filesResp && (filesResp.files || filesResp.data || filesResp) );
+                const filesResp = await workspaceApi.getFiles(workspaceIdToLoad, {
+                    include: ['metadata', 'coordinates']
+                });
+                const filesArr = Array.isArray(filesResp) ? filesResp : (filesResp && filesResp.files);
                 setWorkspaceFiles(filesArr || []);
             } else {
                 setWorkspaceFiles([]);
@@ -278,8 +280,10 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({
                                     setSelectedWorkspaceId(id);
                                     setFilesLoading(true);
                                     try {
-                                        const filesResp = await workspaceApi.getFiles(id);
-                                        const filesArr = Array.isArray(filesResp) ? filesResp : (filesResp && (filesResp.files || filesResp.data || filesResp));
+                                        const filesResp = await workspaceApi.getFiles(id, {
+                                            include: ['metadata', 'coordinates']
+                                        });
+                                        const filesArr = Array.isArray(filesResp) ? filesResp : (filesResp && filesResp.files);
                                         setWorkspaceFiles(filesArr || []);
                                     } catch (err) {
                                         console.error('Error loading files for workspace', err);

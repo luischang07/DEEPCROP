@@ -52,28 +52,28 @@ export const DeleteImageModal: React.FC<DeleteImageModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-md" style={{zIndex: 1500}}>
+            <DialogContent className="sm:max-w-md max-w-[95vw] overflow-hidden" style={{zIndex: 1500}}>
                 <DialogHeader>
                     <div className="flex items-center gap-3">
                         <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                             <AlertTriangle className="h-5 w-5 text-red-600" />
                         </div>
-                        <DialogTitle>Eliminar imagen</DialogTitle>
+                        <DialogTitle className="break-words">Eliminar imagen</DialogTitle>
                     </div>
                 </DialogHeader>
 
                 <div className="space-y-4">
                     <div className="bg-gray-50 p-4 rounded-lg border">
-                        <div className="flex items-center gap-3">
-                            <FileImage className="h-8 w-8 text-gray-400" />
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 truncate">
+                        <div className="flex items-start gap-3">
+                            <FileImage className="h-8 w-8 text-gray-400 flex-shrink-0 mt-1" />
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                                <p className="font-medium text-gray-900 break-all line-clamp-2">
                                     {image.name}
                                 </p>
-                                <p className="text-sm text-gray-500 truncate">
+                                <p className="text-sm text-gray-500 break-all line-clamp-2 mt-1">
                                     {image.original_name}
                                 </p>
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-gray-500 mt-1">
                                     {image.formatted_size} • {image.mime_type}
                                 </p>
                             </div>

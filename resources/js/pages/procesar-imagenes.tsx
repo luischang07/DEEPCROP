@@ -1,337 +1,545 @@
+import React, { useState, useCallback } from 'react';
+import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
-import { Upload, Play, Settings, X, FileImage } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
+import { Upload, FileImage, AlertCircle, CheckCircle2 } from 'lucide-react';
+import axios from '@/lib/axios';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Procesar Imagenes',
-        href: '/procesar-imagenes',
-    },
-];
+interface Workspace {
+    _id: string;
+    name: string;
+}
 
-export default function ProcesarImagenes() {
+interface Props {
+    auth: {
+        user: {
+            name: string;
+            email: string;
+        };
+    };
+    workspaces: Workspace[];
+}
+
+type IndexType = 'ndvi' | 'ndwi' | 'msi';
+
+interface ProcessingState {
+    isProcessing: boolean;
+    progress: number;
+    message: string;
+}
+
+export default function ProcesarImagenes({ auth, workspaces }: Props) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [imageName, setImageName] = useState('');
-    const [analysisType, setAnalysisType] = useState('ndvi');
-    const [resolution, setResolution] = useState('media');
-    const [autoSave, setAutoSave] = useState(true);
-    const [notification, setNotification] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [progress, setProgress] = useState(0);
-    const [dragOver, setDragOver] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [selectedWorkspace, setSelectedWorkspace] = useState<string>('');
+    const [selectedIndex, setSelectedIndex] = useState<IndexType>('ndvi');
+    const [dragActive, setDragActive] = useState(false);
+    const [processing, setProcessing] = useState<ProcessingState>({
+        isProcessing: false,
+        progress: 0,
+        message: ''
+    });
+    const [error, setError] = useState<string>('');
+    const [success, setSuccess] = useState<string>('');
+    const [useMultipleBands, setUseMultipleBands] = useState(false);
 
-    const handleFileSelect = (file: File) => {
-        if (file && (file.type.startsWith('image/') || file.type === 'image/tiff')) {
-            setSelectedFile(file);
-            if (!imageName) {
-                setImageName(file.name.replace(/\.[^/.]+$/, ""));
+    const acceptedFileTypes = ['.tif', '.tiff', '.jp2', '.png'];
+    const maxFileSize = 50 * 1024 * 1024; // 50MB
+
+    // Debug: Log state changes
+    React.useEffect(() => {
+        console.log('Estado actual:', {
+            selectedFile: selectedFile?.name,
+            selectedFiles: selectedFiles.map(f => f.name),
+            useMultipleBands,
+            selectedWorkspace,
+            selectedIndex,
+            isProcessing: processing.isProcessing,
+            buttonEnabled: !!(
+                (selectedFile || (useMultipleBands && selectedFiles.length > 0)) && 
+                selectedWorkspace && 
+                !processing.isProcessing
+            )
+        });
+    }, [selectedFile, selectedFiles, useMultipleBands, selectedWorkspace, selectedIndex, processing.isProcessing]);
+
+    // Debug: Log workspaces on mount
+    React.useEffect(() => {
+        console.log('Workspaces disponibles:', workspaces);
+        if (workspaces && workspaces.length > 0) {
+            console.log('Primer workspace:', workspaces[0]);
+            console.log('Tiene _id?', '_id' in workspaces[0]);
+            console.log('Tiene id?', 'id' in workspaces[0]);
+        }
+    }, []);
+
+    const validateFile = (file: File): string | null => {
+        const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+        if (!acceptedFileTypes.includes(extension)) {
+            return `Tipo de archivo no válido. Acepta: ${acceptedFileTypes.join(', ')}`;
+        }
+        if (file.size > maxFileSize) {
+            return `El archivo es muy grande. Máximo: 50MB`;
+        }
+        return null;
+    };
+
+    const handleDrag = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === "dragenter" || e.type === "dragover") {
+            setDragActive(true);
+        } else if (e.type === "dragleave") {
+            setDragActive(false);
+        }
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+        setError('');
+        setSuccess('');
+
+        if (e.dataTransfer.files) {
+            if (useMultipleBands) {
+                // Handle multiple files
+                const files = Array.from(e.dataTransfer.files);
+                const validFiles: File[] = [];
+                const errors: string[] = [];
+                
+                files.forEach(file => {
+                    const validationError = validateFile(file);
+                    if (validationError) {
+                        errors.push(`${file.name}: ${validationError}`);
+                    } else {
+                        validFiles.push(file);
+                    }
+                });
+                
+                if (errors.length > 0) {
+                    setError(errors.join('\n'));
+                }
+                if (validFiles.length > 0) {
+                    setSelectedFiles(prev => [...prev, ...validFiles]);
+                }
+            } else {
+                // Handle single file
+                const file = e.dataTransfer.files[0];
+                const validationError = validateFile(file);
+                if (validationError) {
+                    setError(validationError);
+                    return;
+                }
+                setSelectedFile(file);
+            }
+        }
+    }, [useMultipleBands]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setError('');
+        setSuccess('');
+        if (e.target.files) {
+            if (useMultipleBands) {
+                // Handle multiple files
+                const files = Array.from(e.target.files);
+                const validFiles: File[] = [];
+                const errors: string[] = [];
+                
+                files.forEach(file => {
+                    const validationError = validateFile(file);
+                    if (validationError) {
+                        errors.push(`${file.name}: ${validationError}`);
+                    } else {
+                        validFiles.push(file);
+                    }
+                });
+                
+                if (errors.length > 0) {
+                    setError(errors.join('\n'));
+                }
+                if (validFiles.length > 0) {
+                    setSelectedFiles(prev => [...prev, ...validFiles]);
+                }
+            } else {
+                // Handle single file
+                const file = e.target.files[0];
+                if (file) {
+                    const validationError = validateFile(file);
+                    if (validationError) {
+                        setError(validationError);
+                        return;
+                    }
+                    setSelectedFile(file);
+                }
+            }
+        }
+    };
+
+    const handleProcess = async () => {
+        // Validate inputs
+        if (useMultipleBands) {
+            if (selectedFiles.length === 0) {
+                setError('Por favor selecciona al menos un archivo de banda');
+                return;
             }
         } else {
-            alert('Por favor selecciona un archivo de imagen válido (JPG, PNG, TIFF)');
+            if (!selectedFile) {
+                setError('Por favor selecciona un archivo');
+                return;
+            }
         }
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFileSelect(files[0]);
-        }
-    };
-
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(true);
-    };
-
-    const handleDragLeave = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
-    };
-
-    const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files && files.length > 0) {
-            handleFileSelect(files[0]);
-        }
-    };
-
-    const handleRemoveFile = () => {
-        setSelectedFile(null);
-        setImageName('');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-    };
-
-    const handleProcessImage = async () => {
-        if (!selectedFile) {
-            alert('Por favor selecciona una imagen primero');
+        
+        if (!selectedWorkspace) {
+            setError('Por favor selecciona un workspace');
             return;
         }
 
-        setIsProcessing(true);
-        setProgress(0);
+        setError('');
+        setSuccess('');
+        setProcessing({
+            isProcessing: true,
+            progress: 10,
+            message: 'Subiendo archivo(s)...'
+        });
 
-        // Simular procesamiento con actualizaciones de progreso
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 100) {
-                    clearInterval(interval);
-                    setIsProcessing(false);
-                    alert('¡Procesamiento completado exitosamente!');
-                    return 100;
-                }
-                return prev + Math.random() * 15;
-            });
-        }, 500);
-
-        // Aquí va la lógica real de procesamiento
-        /*
         const formData = new FormData();
-        formData.append('image', selectedFile);
-        formData.append('name', imageName);
-        formData.append('analysisType', analysisType);
-        formData.append('resolution', resolution);
         
-        try {
-            const response = await fetch('/api/process-image', {
-                method: 'POST',
-                body: formData,
+        if (useMultipleBands) {
+            // Send multiple files
+            selectedFiles.forEach((file, index) => {
+                formData.append('files[]', file);
             });
-            const result = await response.json();
-            // Manejar resultado
-        } catch (error) {
-            console.error('Error procesando imagen:', error);
+            formData.append('image_name', 'combined_bands');
+        } else {
+            // Send single file
+            formData.append('file', selectedFile!);
+            const imageName = selectedFile!.name.replace(/\.[^/.]+$/, '');
+            formData.append('image_name', imageName);
         }
-        */
-    };
+        
+        formData.append('workspace_id', selectedWorkspace);
+        formData.append('index_type', selectedIndex);
 
-    const formatFileSize = (bytes: number) => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    };
+        try {
+            setProcessing(prev => ({ ...prev, progress: 30, message: 'Procesando imagen...' }));
 
-    const getEstimatedTime = () => {
-        if (!selectedFile) return '-- minutos';
-        
-        const fileSizeMB = selectedFile.size / (1024 * 1024);
-        let baseTime = 2; // 2 minutos base
-        
-        // Ajustar tiempo según resolución
-        if (resolution === 'alta') baseTime *= 2;
-        if (resolution === 'baja') baseTime *= 0.5;
-        
-        // Ajustar tiempo según tamaño de archivo
-        const timeMultiplier = Math.max(1, fileSizeMB / 10);
-        
-        const estimatedMinutes = Math.ceil(baseTime * timeMultiplier);
-        return `${estimatedMinutes} minuto${estimatedMinutes !== 1 ? 's' : ''}`;
+            const response = await axios.post('/image-processor/process', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round(
+                        (progressEvent.loaded * 30) / (progressEvent.total || 1)
+                    );
+                    setProcessing(prev => ({
+                        ...prev,
+                        progress: 10 + percentCompleted
+                    }));
+                }
+            });
+
+            setProcessing(prev => ({ ...prev, progress: 80, message: 'Guardando resultados...' }));
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            setProcessing(prev => ({ ...prev, progress: 100, message: 'Completado!' }));
+
+            setSuccess(`Imagen procesada exitosamente. ${response.data.files_created} archivos guardados en el workspace.`);
+
+            // Reset form
+            setSelectedFile(null);
+            setSelectedFiles([]);
+            setSelectedIndex('ndvi');
+
+            // Redirect to workspace images after 2 seconds
+            setTimeout(() => {
+                router.visit(`/workspaces/${selectedWorkspace}/images`);
+            }, 2000);
+
+        } catch (err: any) {
+            console.error('Error processing image:', err);
+            let errorMessage = err.response?.data?.details?.message ||
+                               err.response?.data?.error || 
+                               err.response?.data?.message || 
+                               'Error al procesar la imagen';
+            
+            // Add helpful message if it's a band count issue
+            if (errorMessage.includes('bandas no soportada') || errorMessage.includes('banda SWIR')) {
+                errorMessage += '\n\n💡 Solución: Puedes cargar múltiples archivos de bandas para combinarlas automáticamente.';
+            }
+            
+            setError(errorMessage);
+            setProcessing({
+                isProcessing: false,
+                progress: 0,
+                message: ''
+            });
+        }
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Procesar Imagenes" />
-            
-            <div className="flex h-full flex-1 flex-col gap-6 rounded-xl p-6">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-gray-900">Procesar Imagenes</h1>
-                </div>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Panel de carga de imágenes */}
-                    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <Upload className="mr-2" size={20} />
-                            Cargar Nueva Imagen
-                        </h2>
-                        
-                        {!selectedFile ? (
-                            <div 
-                                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
-                                    ${dragOver 
-                                        ? 'border-blue-500 bg-blue-50' 
-                                        : 'border-gray-300 hover:border-gray-400'
-                                    }`}
-                                onDrop={handleDrop}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <Upload className="mx-auto mb-4 text-gray-400" size={48} />
-                                <p className="text-gray-600 mb-2">Arrastra y suelta tu imagen aquí, o</p>
-                                <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-medium">
-                                    Seleccionar archivo
-                                </button>
-                                <p className="text-sm text-gray-500 mt-2">Formatos soportados: JPG, PNG, TIFF</p>
+        <AppLayout breadcrumbs={[
+            { title: 'Dashboard', href: '/dashboard' },
+            { title: 'Procesar Imágenes', href: '/procesar-imagenes' }
+        ]}>
+            <Head title="Procesar Imágenes" />
+
+            <div className="py-12">
+                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-2xl">Procesar Imágenes Satelitales</CardTitle>
+                            <CardDescription>
+                                Sube una imagen satelital y procésala con índices espectrales (NDVI, NDWI, MSI)
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Multiple Files Toggle */}
+                            <div className="flex items-center space-x-2 p-3 bg-amber-50 border border-amber-200 rounded">
                                 <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,.tiff,.tif"
-                                    onChange={handleFileInputChange}
-                                    className="hidden"
+                                    type="checkbox"
+                                    id="multiple-bands"
+                                    checked={useMultipleBands}
+                                    onChange={(e) => {
+                                        setUseMultipleBands(e.target.checked);
+                                        setSelectedFile(null);
+                                        setSelectedFiles([]);
+                                        setError('');
+                                    }}
+                                    className="w-4 h-4"
+                                    disabled={processing.isProcessing}
                                 />
+                                <label htmlFor="multiple-bands" className="text-sm font-medium cursor-pointer">
+                                    Cargar múltiples archivos de bandas para combinarlas
+                                </label>
                             </div>
-                        ) : (
-                            <div className="border border-gray-200 rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center">
-                                        <FileImage className="text-blue-500 mr-3" size={24} />
-                                        <div>
-                                            <p className="font-medium text-gray-900">{selectedFile.name}</p>
-                                            <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
+
+                            {/* File Upload Area */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                    {useMultipleBands ? 'Archivos de bandas' : 'Archivo de imagen'}
+                                </label>
+                                <div
+                                    className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                                        dragActive
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-gray-300 hover:border-gray-400'
+                                    } ${selectedFile ? 'bg-green-50 border-green-300' : ''}`}
+                                    onDragEnter={handleDrag}
+                                    onDragLeave={handleDrag}
+                                    onDragOver={handleDrag}
+                                    onDrop={handleDrop}
+                                >
+                                    <input
+                                        type="file"
+                                        id="file-upload"
+                                        className="hidden"
+                                        accept={acceptedFileTypes.join(',')}
+                                        onChange={handleFileChange}
+                                        disabled={processing.isProcessing}
+                                        multiple={useMultipleBands}
+                                    />
+                                    <label htmlFor="file-upload" className="cursor-pointer">
+                                        <div className="space-y-2">
+                                            {useMultipleBands ? (
+                                                // Multiple files view
+                                                selectedFiles.length > 0 ? (
+                                                    <>
+                                                        <FileImage className="mx-auto h-12 w-12 text-green-500" />
+                                                        <div className="text-sm font-medium text-green-700">
+                                                            {selectedFiles.length} archivo(s) seleccionado(s)
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 max-h-20 overflow-y-auto">
+                                                            {selectedFiles.map((f, i) => (
+                                                                <div key={i}>{f.name}</div>
+                                                            ))}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                                        <div className="text-sm text-gray-600">
+                                                            <span className="font-semibold text-primary">
+                                                                Click para subir
+                                                            </span>{' '}
+                                                            o arrastra y suelta múltiples archivos
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            TIF, TIFF, JP2 o PNG (máx. 50MB c/u)
+                                                        </div>
+                                                    </>
+                                                )
+                                            ) : (
+                                                // Single file view
+                                                selectedFile ? (
+                                                    <>
+                                                        <FileImage className="mx-auto h-12 w-12 text-green-500" />
+                                                        <div className="text-sm font-medium text-green-700">
+                                                            {selectedFile.name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                                        <div className="text-sm text-gray-600">
+                                                            <span className="font-semibold text-primary">
+                                                                Click para subir
+                                                            </span>{' '}
+                                                            o arrastra y suelta
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            TIF, TIFF, JP2 o PNG (máx. 50MB)
+                                                        </div>
+                                                    </>
+                                                )
+                                            )}
                                         </div>
+                                    </label>
+                                    {(selectedFile || selectedFiles.length > 0) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="mt-2"
+                                            onClick={() => {
+                                                setSelectedFile(null);
+                                                setSelectedFiles([]);
+                                            }}
+                                            disabled={processing.isProcessing}
+                                        >
+                                            Limpiar archivos
+                                        </Button>
+                                    )}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
+                                    <strong>Requisitos de la imagen:</strong>
+                                    <ul className="list-disc list-inside mt-1 space-y-1">
+                                        <li>Mínimo 3 bandas espectrales (RGB + NIR) para NDVI</li>
+                                        <li>Mínimo 5 bandas (incluye SWIR) para NDWI y MSI</li>
+                                        <li>Formatos soportados: TIF, TIFF, JP2, PNG</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            {/* Workspace Selection */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Workspace de destino</label>
+                                <Select
+                                    value={selectedWorkspace}
+                                    onValueChange={setSelectedWorkspace}
+                                    disabled={processing.isProcessing}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona un workspace" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {workspaces.map((workspace) => {
+                                            const workspaceId = workspace._id || (workspace as any).id;
+                                            return (
+                                                <SelectItem key={workspaceId} value={workspaceId}>
+                                                    {workspace.name}
+                                                </SelectItem>
+                                            );
+                                        })}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Index Selection */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Índice espectral</label>
+                                <Select
+                                    value={selectedIndex}
+                                    onValueChange={(value) => setSelectedIndex(value as IndexType)}
+                                    disabled={processing.isProcessing}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ndvi">
+                                            NDVI - Índice de Vegetación de Diferencia Normalizada
+                                        </SelectItem>
+                                        <SelectItem value="ndwi">
+                                            NDWI - Índice de Agua de Diferencia Normalizada
+                                        </SelectItem>
+                                        <SelectItem value="msi">
+                                            MSI - Índice de Estrés Hídrico
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {selectedIndex === 'ndvi' && 'Mide la salud de la vegetación'}
+                                    {selectedIndex === 'ndwi' && 'Detecta contenido de agua en la vegetación'}
+                                    {selectedIndex === 'msi' && 'Evalúa el estrés hídrico de las plantas'}
+                                </p>
+                            </div>
+
+                            {/* Processing Progress */}
+                            {processing.isProcessing && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="font-medium">{processing.message}</span>
+                                        <span className="text-gray-500">{processing.progress}%</span>
                                     </div>
-                                    <button
-                                        onClick={handleRemoveFile}
-                                        className="text-red-500 hover:text-red-700 p-1"
-                                    >
-                                        <X size={20} />
-                                    </button>
+                                    <Progress value={processing.progress} />
                                 </div>
-                                
-                                {/* Vista previa de la imagen */}
-                                <div className="mt-3">
-                                    <img
-                                        src={URL.createObjectURL(selectedFile)}
-                                        alt="Vista previa"
-                                        className="w-full h-32 object-cover rounded-md border"
-                                    />
-                                </div>
+                            )}
+
+                            {/* Error Alert */}
+                            {error && (
+                                <Alert variant="destructive">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertDescription>{error}</AlertDescription>
+                                </Alert>
+                            )}
+
+                            {/* Success Alert */}
+                            {success && (
+                                <Alert className="border-green-200 bg-green-50">
+                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                    <AlertDescription className="text-green-800">
+                                        {success}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
+                            {/* Process Button */}
+                            <Button
+                                onClick={handleProcess}
+                                disabled={
+                                    (!selectedFile && (useMultipleBands ? selectedFiles.length === 0 : true)) || 
+                                    !selectedWorkspace || 
+                                    processing.isProcessing
+                                }
+                                className="w-full"
+                                size="lg"
+                            >
+                                {processing.isProcessing ? 'Procesando...' : 'Procesar Imagen'}
+                            </Button>
+
+                            {/* Debug Info */}
+                            <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-50 rounded">
+                                <div>Modo: {useMultipleBands ? 'Múltiples bandas' : 'Archivo único'}</div>
+                                <div>Archivo único: {selectedFile ? '✓ ' + selectedFile.name : '✗ No seleccionado'}</div>
+                                <div>Archivos múltiples: {selectedFiles.length > 0 ? `✓ ${selectedFiles.length} archivo(s)` : '✗ Ninguno'}</div>
+                                <div>Workspace: {selectedWorkspace ? '✓ Seleccionado' : '✗ No seleccionado'}</div>
+                                <div>Índice: {selectedIndex.toUpperCase()}</div>
+                                <div>Botón: {(
+                                    (!selectedFile && (useMultipleBands ? selectedFiles.length === 0 : true)) || 
+                                    !selectedWorkspace || 
+                                    processing.isProcessing
+                                ) ? 'DESHABILITADO' : 'HABILITADO'}</div>
                             </div>
-                        )}
-                        
-                        <div className="mt-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Nombre de la imagen
-                            </label>
-                            <input
-                                type="text"
-                                value={imageName}
-                                onChange={(e) => setImageName(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Ej: Campo Norte - Agosto 2025"
-                            />
-                        </div>
-                    </div>
-                    
-                    {/* Panel de configuración de procesamiento */}
-                    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <Settings className="mr-2" size={20} />
-                            Configuración de Procesamiento
-                        </h2>
-                        
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Tipo de Análisis
-                                </label>
-                                <select 
-                                    value={analysisType}
-                                    onChange={(e) => setAnalysisType(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="ndvi">Índice de Vegetación (NDVI)</option>
-                                    <option value="crop-detection">Detección de Cultivos</option>
-                                    <option value="health-analysis">Análisis de Salud del Cultivo</option>
-                                    <option value="pest-detection">Detección de Plagas</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Resolución de Procesamiento
-                                </label>
-                                <select 
-                                    value={resolution}
-                                    onChange={(e) => setResolution(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="alta">Alta (Proceso más lento)</option>
-                                    <option value="media">Media (Recomendado)</option>
-                                    <option value="baja">Baja (Proceso más rápido)</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={autoSave}
-                                        onChange={(e) => setAutoSave(e.target.checked)}
-                                        className="mr-2" 
-                                    />
-                                    <span className="text-sm text-gray-700">Guardar resultado automáticamente</span>
-                                </label>
-                            </div>
-                            
-                            <div>
-                                <label className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={notification}
-                                        onChange={(e) => setNotification(e.target.checked)}
-                                        className="mr-2" 
-                                    />
-                                    <span className="text-sm text-gray-700">Enviar notificación al completar</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Panel de procesamiento */}
-                <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <Play className="mr-2" size={20} />
-                        Iniciar Procesamiento
-                    </h2>
-                    
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-gray-600 mb-2">
-                                Imagen seleccionada: <span className="font-medium">
-                                    {selectedFile ? selectedFile.name : 'Ninguna'}
-                                </span>
-                            </p>
-                            <p className="text-gray-600">
-                                Tiempo estimado: <span className="font-medium">{getEstimatedTime()}</span>
-                            </p>
-                        </div>
-                        
-                        <button 
-                            onClick={handleProcessImage}
-                            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-md font-medium flex items-center disabled:bg-gray-400 disabled:cursor-not-allowed"
-                            disabled={!selectedFile || isProcessing}
-                        >
-                            <Play className="mr-2" size={16} />
-                            {isProcessing ? 'Procesando...' : 'Procesar Imagen'}
-                        </button>
-                    </div>
-                    
-                    {/* Barra de progreso */}
-                    {isProcessing && (
-                        <div className="mt-4">
-                            <div className="flex justify-between text-sm text-gray-600 mb-1">
-                                <span>Procesando imagen...</span>
-                                <span>{Math.round(progress)}%</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div 
-                                    className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                                    style={{ width: `${progress}%` }}
-                                ></div>
-                            </div>
-                        </div>
-                    )}
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </AppLayout>

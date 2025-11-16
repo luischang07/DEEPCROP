@@ -630,4 +630,32 @@ class ImageStorageService
         
         return round($bytes, 2) . ' ' . $units[$i];
     }
+
+    /**
+     * Almacenar imagen procesada en MinIO
+     */
+    public function storeProcessedImage(
+        string $imageContent,
+        string $filename,
+        string $workspaceId
+    ): string {
+        try {
+            // Generar path para la imagen procesada
+            $filePath = "workspaces/{$workspaceId}/processed/{$filename}";
+
+            // Guardar en MinIO
+            $stored = Storage::disk($this->disk)->put($filePath, $imageContent);
+
+            if (!$stored) {
+                throw new Exception('Failed to store processed image in MinIO');
+            }
+
+            return $filePath;
+
+                } catch (Exception $e) {
+            Log::error('Error storing processed image: ' . $e->getMessage());
+            throw $e;
+        }
+    }
 }
+

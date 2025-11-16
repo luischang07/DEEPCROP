@@ -50,7 +50,29 @@ Route::get('/dashboard', function () {
     })->name('dashboard');
     
     Route::get('procesar-imagenes', function () {
-        return Inertia::render('procesar-imagenes');
+        $user = auth()->user();
+        
+        // Get workspace IDs where user is a member
+        $workspaceUsers = \App\Models\WorkspaceUser::where('user_id', $user->_id)
+            ->pluck('workspace_id')
+            ->toArray();
+        
+        // Get workspaces created by user or where user is a member
+        $workspaces = \App\Models\Workspace::where(function($query) use ($user, $workspaceUsers) {
+            $query->where('created_by', $user->_id)
+                  ->orWhereIn('_id', $workspaceUsers);
+        })
+        ->get(['_id', 'name'])
+        ->map(function($workspace) {
+            return [
+                '_id' => (string) $workspace->_id,
+                'name' => $workspace->name
+            ];
+        });
+            
+        return Inertia::render('procesar-imagenes', [
+            'workspaces' => $workspaces
+        ]);
     })->name('procesar-imagenes');
     
     Route::get('espacios-trabajo', function () {
@@ -73,6 +95,9 @@ Route::get('/dashboard', function () {
 
 // Incluir rutas de API para workspaces
 require __DIR__.'/workspaces.php';
+
+// Incluir rutas de procesamiento de imágenes
+require __DIR__.'/image-processor.php';
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

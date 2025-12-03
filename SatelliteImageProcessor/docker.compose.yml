@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  satellite-api:
+    build: .
+    container_name: satellite-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=True
+    restart: unless-stopped

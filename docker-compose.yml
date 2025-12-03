@@ -73,6 +73,31 @@ services:
     networks:
       - deepcrop-network
 
+  image-processor:
+    build:
+      context: ./SatelliteImageProcessor
+      dockerfile: Dockerfile
+    container_name: deepcrop-image-processor
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./SatelliteImageProcessor:/app
+      - image_processor_uploads:/app/uploads
+      - image_processor_outputs:/app/outputs
+    environment:
+      - FLASK_APP=run.py
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      - SECRET_KEY=your-secret-key-change-in-production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - deepcrop-network
+
 networks:
   deepcrop-network:
     driver: bridge
@@ -83,4 +108,8 @@ volumes:
   redis_data:
     driver: local
   minio_data:
+    driver: local
+  image_processor_uploads:
+    driver: local
+  image_processor_outputs:
     driver: local

@@ -30,13 +30,10 @@ class WorkspaceImage extends Model
     ];
 
     protected $casts = [
-        'metadata' => 'array',
-        'geospatial_bounds' => 'array',
         'center_lat' => 'float',
         'center_lng' => 'float',
         'is_processed' => 'boolean',
         'file_size' => 'integer',
-        'tags' => 'array',
     ];
 
     public function workspace(): BelongsTo

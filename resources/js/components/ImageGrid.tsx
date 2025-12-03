@@ -469,7 +469,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
                                 </Box>
 
                                 {/* Tags */}
-                                {image.tags.length > 0 && (
+                                {image.tags && image.tags.length > 0 && (
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                         {image.tags.slice(0, 3).map(tag => (
                                             <Chip key={tag} label={tag} size="small" variant="outlined" />

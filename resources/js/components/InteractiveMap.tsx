@@ -355,129 +355,69 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
             setSelectedName(file.name);
             setActiveTab('analisis');
             
-            // Auto-seleccionar coordenadas y ajustar zoom
+            // Check if it's a GeoJSON or JSON file
+            if (file.name.toLowerCase().endsWith('.geojson') || file.name.toLowerCase().endsWith('.json')) {
+                console.log('=== PROCESANDO ARCHIVO GEOJSON ===');
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const content = e.target?.result as string;
+                        const data = JSON.parse(content);
+                        
+                        let geometryCoords: any[] = [];
+                        
+                        // Extract polygon coordinates from FeatureCollection or simple Feature
+                        if (data.type === 'FeatureCollection' && data.features && data.features.length > 0) {
+                            const feature = data.features.find((f: any) => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+                            if (feature) {
+                                if (feature.geometry.type === 'Polygon') {
+                                    geometryCoords = feature.geometry.coordinates[0];
+                                } else if (feature.geometry.type === 'MultiPolygon') {
+                                    geometryCoords = feature.geometry.coordinates[0][0]; // take the first polygon
+                                }
+                            }
+                        } else if (data.type === 'Feature' && data.geometry) {
+                            if (data.geometry.type === 'Polygon') {
+                                geometryCoords = data.geometry.coordinates[0];
+                            } else if (data.geometry.type === 'MultiPolygon') {
+                                geometryCoords = data.geometry.coordinates[0][0];
+                            }
+                        } else if (data.type === 'Polygon' && data.coordinates) {
+                            geometryCoords = data.coordinates[0];
+                        }
+
+                        if (geometryCoords && geometryCoords.length > 2) {
+                            // GeoJSON uses [lng, lat], we need [lat, lng] for Leaflet
+                            const leafletCoords = geometryCoords.map((c: number[]) => [c[1], c[0]]);
+                            
+                            // Calculate center
+                            const centerLat = leafletCoords.reduce((sum: number, c: number[]) => sum + c[0], 0) / leafletCoords.length;
+                            const centerLng = leafletCoords.reduce((sum: number, c: number[]) => sum + c[1], 0) / leafletCoords.length;
+
+                            const coordinateData = {
+                                lat: centerLat,
+                                lng: centerLng,
+                                zoom: 14,
+                                coordinates: leafletCoords
+                            };
+
+                            renderCoordinatesOnMap(coordinateData, file.name);
+                        } else {
+                            alert('No se encontraron polígonos válidos en el archivo GeoJSON.');
+                        }
+                    } catch (err) {
+                        console.error('Error parsing GeoJSON:', err);
+                        alert('Error al leer el archivo GeoJSON. Asegúrate de que tenga un formato válido.');
+                    }
+                };
+                reader.readAsText(file);
+                return; // Stop here, no need to extract image coordinates
+            }
+
+            // Auto-seleccionar coordenadas y ajustar zoom para imágenes
             try {
                 const coordinateData = await extractImageCoordinates(file);
-                console.log('=== RESULTADO DE EXTRACCIÓN DE COORDENADAS ===');
-                console.log('Coordinate data:', coordinateData);
-                
-                if (coordinateData && mapRef.current) {
-                    console.log('=== DATOS DE COORDENADAS ENCONTRADOS ===');
-                    console.log('Tipo de datos:', typeof coordinateData);
-                    console.log('Propiedades:', Object.keys(coordinateData));
-                    console.log('Lat:', coordinateData.lat);
-                    console.log('Lng:', coordinateData.lng);
-                    console.log('Zoom:', coordinateData.zoom);
-                    console.log('Coordinates array:', coordinateData.coordinates);
-                    console.log('Coordinates length:', coordinateData.coordinates?.length);
-                    
-                    if (coordinateData.coordinates && coordinateData.coordinates.length > 2) {
-                        // Si hay coordenadas de polígono, crear el polígono
-                        console.log('=== CREANDO POLÍGONO ===');
-                        console.log('Coordenadas del polígono:', coordinateData.coordinates);
-                        
-                        if (drawnItemsRef.current) {
-                            // Limpiar elementos previos
-                            drawnItemsRef.current.clearLayers();
-                            setSelectedAreas([]);
-                            console.log('Layers limpiados');
-                            
-                            // Crear el polígono
-                            const polygon = L.polygon(coordinateData.coordinates.map(coord => [coord[0], coord[1]]), {
-                                color: '#97009c',
-                                weight: 3,
-                                opacity: 0.8,
-                                fillOpacity: 0.3,
-                            }).addTo(drawnItemsRef.current);
-                            console.log('Polígono creado y agregado al mapa');
-                            
-                            // Agregar popup con información
-                            const popupContent = `
-                                <strong>Área desde imagen:</strong> ${file.name}<br>
-                                <strong>Coordenadas:</strong> ${coordinateData.coordinates.length} puntos<br>
-                                <strong>Centro:</strong> ${coordinateData.lat.toFixed(6)}, ${coordinateData.lng.toFixed(6)}
-                            `;
-                            polygon.bindPopup(popupContent);
-                            console.log('Popup agregado al polígono');
-                            
-                            // Calcular área usando GeometryUtil si está disponible
-                            const polygonLatLngs = polygon.getLatLngs()[0] as L.LatLng[];
-                            const area = L.GeometryUtil ? 
-                                L.GeometryUtil.geodesicArea(polygonLatLngs) : 
-                                calculateArea(coordinateData.coordinates);
-                            console.log('Área calculada:', area);
-                            
-                            // Actualizar estado
-                            const selectedArea = {
-                                type: 'polygon',
-                                coordinates: coordinateData.coordinates,
-                                area: area
-                            };
-                            
-                            setSelectedAreas([selectedArea]);
-                            if (onAreaSelected) {
-                                onAreaSelected(selectedArea);
-                            }
-                            console.log('Estado actualizado con área seleccionada');
-                            
-                            // Ajustar vista al polígono
-                            const bounds = L.latLngBounds(coordinateData.coordinates.map(coord => [coord[0], coord[1]]));
-                            mapRef.current.fitBounds(bounds, { padding: [20, 20] });
-                            console.log('=== AUTO-ZOOM APLICADO ===');
-                            console.log('Bounds:', bounds);
-                            
-                            // Actualizar GeoJSON para búsquedas
-                            const geojsonFeature = {
-                                type: 'Feature',
-                                geometry: {
-                                    type: 'Polygon',
-                                    coordinates: [coordinateData.coordinates.map(coord => [coord[1], coord[0]])]
-                                },
-                                properties: {}
-                            };
-                            setGeoJson(geojsonFeature);
-                            console.log('GeoJSON actualizado para búsquedas');
-                        }
-                    } else {
-                        // Si solo hay coordenadas de centro, hacer zoom a esa ubicación
-                        console.log('=== CREANDO MARCADOR DE CENTRO ===');
-                        console.log('Coordenadas de centro:', coordinateData.lat, coordinateData.lng);
-                        const zoom = coordinateData.zoom || 15;
-                        mapRef.current.setView([coordinateData.lat, coordinateData.lng], zoom);
-                        console.log('Vista del mapa ajustada a:', [coordinateData.lat, coordinateData.lng], 'zoom:', zoom);
-                        
-                        // Agregar un marcador en el centro
-                        if (drawnItemsRef.current) {
-                            drawnItemsRef.current.clearLayers();
-                            setSelectedAreas([]);
-                            
-                            const marker = L.marker([coordinateData.lat, coordinateData.lng])
-                                .addTo(drawnItemsRef.current);
-                            
-                            marker.bindPopup(`
-                                <strong>Ubicación desde imagen:</strong> ${file.name}<br>
-                                <strong>Coordenadas:</strong> ${coordinateData.lat.toFixed(6)}, ${coordinateData.lng.toFixed(6)}
-                            `);
-                            console.log('Marcador creado en:', [coordinateData.lat, coordinateData.lng]);
-                            
-                            // Actualizar estado
-                            const selectedArea = {
-                                type: 'marker',
-                                coordinates: [[coordinateData.lat, coordinateData.lng]]
-                            };
-                            
-                            setSelectedAreas([selectedArea]);
-                            if (onAreaSelected) {
-                                onAreaSelected(selectedArea);
-                            }
-                            console.log('Estado actualizado con marcador');
-                        }
-                    }
-                } else {
-                    console.log('=== NO SE ENCONTRARON COORDENADAS ===');
-                    console.log('coordinateData es null o undefined');
-                    console.log('mapRef.current existe:', !!mapRef.current);
-                }
+                renderCoordinatesOnMap(coordinateData, file.name);
             } catch (error) {
                 console.error('=== ERROR PROCESANDO COORDENADAS ===');
                 console.error('Error details:', error);
@@ -485,6 +425,126 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
             }
             
             console.log('=== FIN DE PROCESAMIENTO DE ARCHIVO ===');
+        }
+    };
+
+    const renderCoordinatesOnMap = (coordinateData: any, sourceName: string) => {
+        if (coordinateData && mapRef.current) {
+            console.log('=== DATOS DE COORDENADAS ENCONTRADOS ===');
+            console.log('Tipo de datos:', typeof coordinateData);
+            console.log('Propiedades:', Object.keys(coordinateData));
+            console.log('Lat:', coordinateData.lat);
+            console.log('Lng:', coordinateData.lng);
+            console.log('Zoom:', coordinateData.zoom);
+            console.log('Coordinates array:', coordinateData.coordinates);
+            console.log('Coordinates length:', coordinateData.coordinates?.length);
+            
+            if (coordinateData.coordinates && coordinateData.coordinates.length > 2) {
+                // Si hay coordenadas de polígono, crear el polígono
+                console.log('=== CREANDO POLÍGONO ===');
+                console.log('Coordenadas del polígono:', coordinateData.coordinates);
+                
+                if (drawnItemsRef.current) {
+                    // Limpiar elementos previos
+                    drawnItemsRef.current.clearLayers();
+                    setSelectedAreas([]);
+                    console.log('Layers limpiados');
+                    
+                    // Crear el polígono
+                    const polygon = L.polygon(coordinateData.coordinates.map((coord: number[]) => [coord[0], coord[1]]), {
+                        color: '#97009c',
+                        weight: 3,
+                        opacity: 0.8,
+                        fillOpacity: 0.3,
+                    }).addTo(drawnItemsRef.current);
+                    console.log('Polígono creado y agregado al mapa');
+                    
+                    // Agregar popup con información
+                    const popupContent = `
+                        <strong>Área desde:</strong> ${sourceName}<br>
+                        <strong>Coordenadas:</strong> ${coordinateData.coordinates.length} puntos<br>
+                        <strong>Centro:</strong> ${coordinateData.lat.toFixed(6)}, ${coordinateData.lng.toFixed(6)}
+                    `;
+                    polygon.bindPopup(popupContent);
+                    console.log('Popup agregado al polígono');
+                    
+                    // Calcular área usando GeometryUtil si está disponible
+                    const polygonLatLngs = polygon.getLatLngs()[0] as L.LatLng[];
+                    const area = L.GeometryUtil ? 
+                        L.GeometryUtil.geodesicArea(polygonLatLngs) : 
+                        calculateArea(coordinateData.coordinates);
+                    console.log('Área calculada:', area);
+                    
+                    // Actualizar estado
+                    const selectedArea = {
+                        type: 'polygon',
+                        coordinates: coordinateData.coordinates,
+                        area: area
+                    };
+                    
+                    setSelectedAreas([selectedArea]);
+                    if (onAreaSelected) {
+                        onAreaSelected(selectedArea);
+                    }
+                    console.log('Estado actualizado con área seleccionada');
+                    
+                    // Ajustar vista al polígono
+                    const bounds = L.latLngBounds(coordinateData.coordinates.map((coord: number[]) => [coord[0], coord[1]]));
+                    mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+                    console.log('=== AUTO-ZOOM APLICADO ===');
+                    console.log('Bounds:', bounds);
+                    
+                    // Actualizar GeoJSON para búsquedas
+                    const geojsonFeature = {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Polygon',
+                            coordinates: [coordinateData.coordinates.map((coord: number[]) => [coord[1], coord[0]])]
+                        },
+                        properties: {}
+                    };
+                    setGeoJson(geojsonFeature);
+                    console.log('GeoJSON actualizado para búsquedas');
+                }
+            } else {
+                // Si solo hay coordenadas de centro, hacer zoom a esa ubicación
+                console.log('=== CREANDO MARCADOR DE CENTRO ===');
+                console.log('Coordenadas de centro:', coordinateData.lat, coordinateData.lng);
+                const zoom = coordinateData.zoom || 15;
+                mapRef.current.setView([coordinateData.lat, coordinateData.lng], zoom);
+                console.log('Vista del mapa ajustada a:', [coordinateData.lat, coordinateData.lng], 'zoom:', zoom);
+                
+                // Agregar un marcador en el centro
+                if (drawnItemsRef.current) {
+                    drawnItemsRef.current.clearLayers();
+                    setSelectedAreas([]);
+                    
+                    const marker = L.marker([coordinateData.lat, coordinateData.lng])
+                        .addTo(drawnItemsRef.current);
+                    
+                    marker.bindPopup(`
+                        <strong>Ubicación cargada:</strong> ${sourceName}<br>
+                        <strong>Coordenadas:</strong> ${coordinateData.lat.toFixed(6)}, ${coordinateData.lng.toFixed(6)}
+                    `);
+                    console.log('Marcador creado en:', [coordinateData.lat, coordinateData.lng]);
+                    
+                    // Actualizar estado
+                    const selectedArea = {
+                        type: 'marker',
+                        coordinates: [[coordinateData.lat, coordinateData.lng]]
+                    };
+                    
+                    setSelectedAreas([selectedArea]);
+                    if (onAreaSelected) {
+                        onAreaSelected(selectedArea);
+                    }
+                    console.log('Estado actualizado con marcador');
+                }
+            }
+        } else {
+            console.log('=== NO SE ENCONTRARON COORDENADAS ===');
+            console.log('coordinateData es null o undefined');
+            console.log('mapRef.current existe:', !!mapRef.current);
         }
     };
 

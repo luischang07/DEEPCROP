@@ -248,7 +248,7 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({
                 }}
             >
                 <h3 className="text-sm font-medium text-gray-700 mb-2">
-                    {selectedName || 'Sube o arrastra una imagen aquí'}
+                    {selectedName || 'Sube o arrastra un archivo aquí'}
                 </h3>
                 <div className="flex justify-center items-center mb-2">
                     <span className="text-4xl">📁</span>
@@ -257,10 +257,10 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({
                     id="file-upload-input"
                     type="file"
                     onChange={onFileChange}
-                    accept="image/*,.tiff,.tif"
+                    accept="image/*,.tiff,.tif,.geojson,.json"
                     className="hidden"
                 />
-                <p className="text-xs text-gray-500 mt-2">Formatos soportados: JPG, PNG, TIFF</p>
+                <p className="text-xs text-gray-500 mt-2">Formatos soportados: JPG, PNG, TIFF, GeoJSON</p>
 
                 {/* Dialog para seleccionar archivo del workspace */}
                 <Dialog open={showLoadDialog} onClose={() => setShowLoadDialog(false)} fullWidth maxWidth="sm">

@@ -82,13 +82,13 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         if (activeTab !== 'files') return;
         // Si ya tenemos archivos cargados o estamos en medio de una carga, no hacer nada
         if (filesLoading) return;
+        if (filesMeta !== null) return; // Previene loops si el workspace tiene 0 archivos
         if (workspace && workspace.files && workspace.files.length > 0) return;
 
-        // Cargar primeros 50 archivos
+        // Cargar primera página de archivos
         loadFiles();
-        // We intentionally depend on activeTab and workspace?.files?.length (indirect) to avoid
-        // running this effect every time the workspace object identity changes.
-    }, [activeTab, filesLoading, workspace?.files?.length]);
+        // Dependencias estrictas para evitar re-renderizados infinitos con espacios vacíos
+    }, [activeTab, filesLoading, filesMeta, workspace?.files?.length]);
 
     useEffect(() => {
         // Recargar imágenes solo cuando se cambia específicamente a la pestaña de imágenes

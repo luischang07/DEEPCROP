@@ -440,7 +440,7 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
                                         <SelectValue placeholder="Selecciona un workspace" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {workspaces.map((workspace) => {
+                                        {(workspaces || []).map((workspace) => {
                                             const workspaceId = workspace._id || (workspace as any).id;
                                             return (
                                                 <SelectItem key={workspaceId} value={workspaceId}>

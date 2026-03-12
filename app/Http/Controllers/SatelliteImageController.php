@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use App\Models\PlanetOrder;
 
 class SatelliteImageController extends Controller
 {
@@ -30,17 +31,17 @@ class SatelliteImageController extends Controller
 
       $coordinates = $request->input('coordinates');
 
-      $bounds = null;
-      if (isset($coordinates[0]) && is_array($coordinates[0])) {
-        // Verificar si coordinates[0] contiene puntos [lng, lat] directamente
-        if (isset($coordinates[0][0]) && is_array($coordinates[0][0]) && count($coordinates[0][0]) === 2 && is_numeric($coordinates[0][0][0])) {
-          $bounds = $coordinates[0]; // coordinates[0] contiene el array de puntos
-        } else {
-          // Estructura más anidada
-          $bounds = $coordinates[0][0] ?? $coordinates[0];
-        }
-      } else {
-        $bounds = $coordinates;
+      $bounds = $coordinates;
+
+      // Mientras $bounds sea un array y su primer elemento sea otro array que a su vez contiene un array, desanidamos.
+      // Queremos parar cuando $bounds[0] sea [lng, lat], es decir, un array de números.
+      while (is_array($bounds) && isset($bounds[0]) && is_array($bounds[0]) && isset($bounds[0][0]) && is_array($bounds[0][0])) {
+          $bounds = $bounds[0];
+      }
+
+      // Verificamos por seguridad si sigue estando mal formado (por si mandan un solo punto [lng, lat])
+      if (is_array($bounds) && isset($bounds[0]) && is_numeric($bounds[0])) {
+          $bounds = [$bounds]; // Convertimos [lng, lat] individual a [[lng, lat]]
       }
 
       $payload = [
@@ -49,6 +50,10 @@ class SatelliteImageController extends Controller
         'date_end' => $request->input('end_date'),
         'max_cloud_cover' => $request->input('max_cloud_cover', 20),
       ];
+      
+      if ($request->has('collection')) {
+        $payload['collection'] = $request->input('collection');
+      }
 
       Log::info('Enviando solicitud al microservicio de satélites', [
         'url' => $this->satelliteServiceUrl . '/search',
@@ -154,6 +159,133 @@ class SatelliteImageController extends Controller
         'details' => $e->getMessage()
       ], 500);
     }
+  }
+
+  /**
+   * Buscar imágenes en Planet Scope
+   */
+  public function searchPlanetImages(Request $request)
+  {
+    try {
+      $request->validate([
+        'coordinates' => 'required|array',
+        'start_date' => 'required|date',
+        'end_date' => 'required|date|after:start_date',
+        'max_cloud_cover' => 'nullable|numeric|min:0|max:100',
+      ]);
+
+      $payload = [
+        'geometry' => $request->input('coordinates'),
+        'date_start' => $request->input('start_date'),
+        'date_end' => $request->input('end_date'),
+        'max_cloud_cover' => $request->input('max_cloud_cover', 20.0),
+        'api_key' => env('PLANET_API_KEY')
+      ];
+
+      $response = Http::timeout(120)
+        ->post($this->satelliteServiceUrl . '/planet/search', $payload);
+
+      if (!$response->successful()) {
+        return response()->json($response->json(), $response->status());
+      }
+
+      return response()->json($response->json());
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  /**
+   * Crear una orden en Planet Scope
+   */
+  public function orderPlanetImages(Request $request)
+  {
+    try {
+      $request->validate([
+        'name' => 'required|string',
+        'item_ids' => 'required|array',
+        'coordinates' => 'nullable|array'
+      ]);
+
+      $payload = [
+        'name' => $request->input('name'),
+        'item_ids' => $request->input('item_ids'),
+        'api_key' => env('PLANET_API_KEY')
+      ];
+
+      if ($request->has('coordinates')) {
+        $payload['geometry'] = $request->input('coordinates');
+      }
+
+      $response = Http::timeout(120)
+        ->post($this->satelliteServiceUrl . '/planet/order', $payload);
+
+      if (!$response->successful()) {
+        return response()->json($response->json(), $response->status());
+      }
+
+      $data = $response->json();
+      
+      // Guardar la orden en la base de datos
+      if (isset($data['id'])) {
+          PlanetOrder::create([
+              'order_id' => $data['id'],
+              'name' => $payload['name'],
+              'status' => $data['state'] ?? 'queued',
+              'metadata' => [
+                  'item_ids' => $payload['item_ids'],
+                  'coordinates' => $request->input('coordinates')
+              ]
+          ]);
+      }
+
+      return response()->json($data);
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  /**
+   * Listar pedidos guardados
+   */
+  public function getPlanetOrders()
+  {
+      $orders = PlanetOrder::orderBy('created_at', 'desc')->get();
+      return response()->json($orders);
+  }
+
+  /**
+   * Revisar el estado actual de una orden y guardar si finalizó
+   */
+  public function checkPlanetOrderStatus($order_id)
+  {
+      try {
+          $order = PlanetOrder::where('order_id', $order_id)->firstOrFail();
+
+          if ($order->status === 'success' || $order->status === 'failed') {
+              return response()->json($order);
+          }
+
+          $response = Http::timeout(30)->get($this->satelliteServiceUrl . '/planet/order/' . $order_id, [
+              'api_key' => env('PLANET_API_KEY')
+          ]);
+
+          if ($response->successful()) {
+              $data = $response->json();
+              $order->status = $data['state'] ?? $order->status;
+              
+              if ($order->status === 'success' && isset($data['_links']['results'][0]['location'])) {
+                  $order->download_url = $data['_links']['results'][0]['location'];
+              }
+
+              $order->save();
+          }
+
+          return response()->json($order);
+      } catch (\Exception $e) {
+          Log::error('Error verificando estado de orden Planet', ['error' => $e->getMessage()]);
+          return response()->json(['error' => 'Error al consultar estado'], 500);
+      }
   }
 
   /**

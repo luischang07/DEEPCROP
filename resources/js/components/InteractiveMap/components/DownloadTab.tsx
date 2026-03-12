@@ -20,12 +20,14 @@ import {
 interface DownloadTabProps {
     sentinelChecked: boolean;
     planetChecked: boolean;
+    engineChecked: boolean;
     startDate: string;
     endDate: string;
     selectedName: string;
     isSearching: boolean;
     onSentinelChange: (checked: boolean) => void;
     onPlanetChange: (checked: boolean) => void;
+    onEngineChange: (checked: boolean) => void;
     onStartDateChange: (date: string) => void;
     onEndDateChange: (date: string) => void;
     onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -35,12 +37,14 @@ interface DownloadTabProps {
 export const DownloadTab: React.FC<DownloadTabProps> = ({
     sentinelChecked,
     planetChecked,
+    engineChecked,
     startDate,
     endDate,
     selectedName,
     isSearching,
     onSentinelChange,
     onPlanetChange,
+    onEngineChange,
     onStartDateChange,
     onEndDateChange,
     onFileChange,
@@ -154,7 +158,16 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({
                         onChange={(e) => onSentinelChange(e.target.checked)}
                         className="mr-2" 
                     />
-                    <span className="text-sm text-gray-700">Sentinel</span>
+                    <span className="text-sm text-gray-700">Sentinel-2 (Google Earth Engine)</span>
+                </label>
+                <label className="flex items-center">
+                    <input 
+                        type="checkbox" 
+                        checked={engineChecked}
+                        onChange={(e) => onEngineChange(e.target.checked)}
+                        className="mr-2" 
+                    />
+                    <span className="text-sm text-gray-700">Landsat-8 (Google Earth Engine)</span>
                 </label>
                 <label className="flex items-center">
                     <input 

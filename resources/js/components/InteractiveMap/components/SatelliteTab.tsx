@@ -1,4 +1,5 @@
 import React from 'react';
+import { PlanetOrdersList } from './PlanetOrdersList';
 
 interface SatelliteImage {
     id: string;
@@ -9,16 +10,19 @@ interface SatelliteImage {
     product_id: string;
     spacecraft: string;
     orbit: number;
+    item_type?: string;
 }
 
 interface SatelliteTabProps {
     searchResults: SatelliteImage[];
     onDownloadImage?: (imageId: string, bandName: string) => void;
+    onOrderImage?: (image: SatelliteImage) => void;
 }
 
 export const SatelliteTab: React.FC<SatelliteTabProps> = ({
     searchResults,
-    onDownloadImage
+    onDownloadImage,
+    onOrderImage
 }) => {
     return (
         <div className="space-y-4">
@@ -87,46 +91,67 @@ export const SatelliteTab: React.FC<SatelliteTabProps> = ({
                                 <div className="text-xs font-mono text-gray-700 break-all">{image.product_id}</div>
                             </div>
 
-                            {/* Panel de descarga */}
+                            {/* Panel de descarga / pedido */}
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-blue-600 font-medium text-sm">📥 Descargar Imagen</span>
-                                </div>
-                                <div className="space-y-2">
-                                    <select 
-                                        className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        id={`band-${image.id}`}
-                                        defaultValue=""
-                                    >
-                                        <option value="" disabled>Seleccionar banda espectral</option>
-                                        {image.bands.map((band) => (
-                                            <option key={band} value={band}>
-                                                {band} {
-                                                    band === 'B4' ? '(Rojo - 665nm)' : 
-                                                    band === 'B3' ? '(Verde - 560nm)' : 
-                                                    band === 'B2' ? '(Azul - 490nm)' : 
-                                                    band === 'B8' ? '(Infrarrojo cercano - 842nm)' : 
-                                                    band === 'B11' ? '(SWIR - 1610nm)' : 
-                                                    band === 'B12' ? '(SWIR - 2190nm)' : ''
-                                                }
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={() => {
-                                            const select = document.getElementById(`band-${image.id}`) as HTMLSelectElement;
-                                            const selectedBand = select.value;
-                                            if (selectedBand && onDownloadImage) {
-                                                onDownloadImage(image.full_id || image.id, selectedBand);
-                                            } else {
-                                                alert('Por favor selecciona una banda espectral');
-                                            }
-                                        }}
-                                        className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
-                                    >
-                                        📥 Descargar Imagen Satelital
-                                    </button>
-                                </div>
+                                {image.item_type ? (
+                                    // Interface para Planet (Pedido)
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-blue-600 font-medium text-sm">📦 Pedido Planet Scope</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600">
+                                            Las imágenes de Planet requieren ser procesadas (recorte y corrección) ante de descargar.
+                                        </p>
+                                        <button
+                                            onClick={() => onOrderImage && onOrderImage(image)}
+                                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <span>🚀</span> Solicitar Pedido (Clip AOI)
+                                        </button>
+                                    </div>
+                                ) : (
+                                    // Interface para Sentinel (Descarga directa)
+                                    <>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-blue-600 font-medium text-sm">📥 Descargar Imagen</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <select 
+                                                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                id={`band-${image.id}`}
+                                                defaultValue=""
+                                            >
+                                                <option value="" disabled>Seleccionar banda espectral</option>
+                                                {image.bands.map((band) => (
+                                                    <option key={band} value={band}>
+                                                        {band} {
+                                                            band === 'B4' ? '(Rojo - 665nm)' : 
+                                                            band === 'B3' ? '(Verde - 560nm)' : 
+                                                            band === 'B2' ? '(Azul - 490nm)' : 
+                                                            band === 'B8' ? '(Infrarrojo cercano - 842nm)' : 
+                                                            band === 'B11' ? '(SWIR - 1610nm)' : 
+                                                            band === 'B12' ? '(SWIR - 2190nm)' : ''
+                                                        }
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={() => {
+                                                    const select = document.getElementById(`band-${image.id}`) as HTMLSelectElement;
+                                                    const selectedBand = select.value;
+                                                    if (selectedBand && onDownloadImage) {
+                                                        onDownloadImage(image.full_id || image.id, selectedBand);
+                                                    } else {
+                                                        alert('Por favor selecciona una banda espectral');
+                                                    }
+                                                }}
+                                                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+                                            >
+                                                📥 Descargar Imagen Satelital
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                                 
                                 {/* Indicador de calidad */}
                                 <div className="mt-2 flex items-center gap-2">
@@ -175,6 +200,9 @@ export const SatelliteTab: React.FC<SatelliteTabProps> = ({
                     </div>
                 </div>
             )}
+            
+            {/* Lista de Pedidos Persistentes (Planet) */}
+            <PlanetOrdersList />
         </div>
     );
 };

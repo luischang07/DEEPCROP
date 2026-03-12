@@ -53,6 +53,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
     const [startDate, setStartDate] = useState('2025-03-02');
     const [endDate, setEndDate] = useState('2025-04-02');
     const [sentinelChecked, setSentinelChecked] = useState(true);
+    const [engineChecked, setEngineChecked] = useState(false);
     const [planetChecked, setPlanetChecked] = useState(true);
     const [isSearching, setIsSearching] = useState(false);
     const [geoJson, setGeoJson] = useState<any>(null);
@@ -245,7 +246,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
             return;
         }
 
-        if (!sentinelChecked && !planetChecked) {
+        if (!sentinelChecked && !planetChecked && !engineChecked) {
             alert('Por favor selecciona al menos un satélite');
             return;
         }
@@ -257,20 +258,79 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
 
         setIsSearching(true);
         try {
-            // Solo procesar Sentinel por ahora, ya que Planet Scope requiere API diferente
+            // Acumulador de resultados
+            let allResults: any[] = [];
+            
             if (sentinelChecked) {
-                console.log('Iniciando búsqueda de imágenes Sentinel...');
-                console.log('Área:', geoJson);
-                console.log('Fechas:', { startDate, endDate });
+                console.log('Iniciando búsqueda de imágenes Sentinel-2...');
+                try {
+                    const response = await fetch('/api/satellite/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                        },
+                        body: JSON.stringify({
+                            coordinates: geoJson.geometry.coordinates[0],
+                            start_date: startDate,
+                            end_date: endDate,
+                            collection: 'COPERNICUS/S2_SR_HARMONIZED'
+                        })
+                    });
 
-                const response = await fetch('/api/satellite/search', {
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Error al buscar imágenes Sentinel');
+                    if (data.images && data.images.length > 0) {
+                        allResults = [...allResults, ...data.images];
+                    }
+                } catch (e) {
+                    console.error('Error Sentinel:', e);
+                    alert(`Error Sentinel: ${e instanceof Error ? e.message : 'Desconocido'}`);
+                }
+            }
+
+            if (engineChecked) {
+                console.log('Iniciando búsqueda de imágenes Landsat-8...');
+                try {
+                    const response = await fetch('/api/satellite/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                        },
+                        body: JSON.stringify({
+                            coordinates: geoJson.geometry.coordinates[0],
+                            start_date: startDate,
+                            end_date: endDate,
+                            collection: 'LANDSAT/LC08/C02/T1_L2'
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Error al buscar imágenes Landsat');
+                    if (data.images && data.images.length > 0) {
+                        allResults = [...allResults, ...data.images];
+                    }
+                } catch (e) {
+                    console.error('Error Landsat:', e);
+                    alert(`Error Landsat: ${e instanceof Error ? e.message : 'Desconocido'}`);
+                }
+            }
+
+            if (planetChecked) {
+                console.log('Iniciando búsqueda de imágenes Planet Scope...');
+                
+                // Planet espera coordenadas GeoJSON: [[lng, lat], ...]
+                const planetCoords = geoJson.geometry.coordinates[0];
+
+                const response = await fetch('/api/satellite/planet/search', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                     },
                     body: JSON.stringify({
-                        coordinates: geoJson.geometry.coordinates,
+                        coordinates: planetCoords,
                         start_date: startDate,
                         end_date: endDate
                     })
@@ -279,28 +339,28 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Error al buscar imágenes');
+                    throw new Error(data.error || 'Error al buscar imágenes de Planet');
                 }
 
-                console.log('Imágenes encontradas:', data);
-                
-                if (data.images && data.images.length > 0) {
-                    setSearchResults(data.images);
-                    alert(`Se encontraron ${data.images.length} imágenes de Sentinel-2. Ve al tab "Satelitales" para verlas.`);
-                    
-                    // Cambiar al tab de satelitales para mostrar los resultados
-                    setActiveTab('satelitales');
-                    
-                } else {
-                    setSearchResults([]);
-                    alert('No se encontraron imágenes en el área y rango de fechas especificados');
+                console.log('Imágenes de Planet encontradas:', data);
+                if (data && data.length > 0) {
+                    allResults = [...allResults, ...data];
+                } else if (!sentinelChecked && !engineChecked) {
+                    alert('No se encontraron imágenes de Planet en este rango.');
                 }
             }
-
-            if (planetChecked) {
-                alert('La búsqueda en Planet Scope estará disponible próximamente');
+            
+            setSearchResults(allResults);
+            
+            if (allResults.length > 0) {
+                alert(`Se encontraron ${allResults.length} imágenes en total.`);
+                setActiveTab('satelitales');
+            } else if (!planetChecked || (planetChecked && !sentinelChecked && !engineChecked)) {
+                // If it was already alerted for Planet, avoid double alert
+                if (!(planetChecked && !sentinelChecked && !engineChecked)) {
+                    alert('No se encontraron imágenes en este rango de fechas para los satélites seleccionados.');
+                }
             }
-
         } catch (error) {
             console.error('Error fetching image data:', error);
             alert(`Error al buscar imágenes: ${error instanceof Error ? error.message : 'Error desconocido'}`);
@@ -337,6 +397,42 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
         } catch (error) {
             console.error('Error downloading image:', error);
             alert(`Error al descargar imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        }
+    };
+
+    const handleOrderPlanetImage = async (image: any) => {
+        try {
+            const orderName = `Order_${image.id}_${new Date().getTime()}`;
+            const planetCoords = geoJson.geometry.coordinates[0];
+
+            const { toast } = await import('sonner');
+            const toastId = toast.loading('Creando pedido en Planet Scope...');
+
+            const response = await fetch('/api/satellite/planet/order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({
+                    name: orderName,
+                    item_ids: [image.id],
+                    coordinates: planetCoords
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Error al crear pedido');
+            }
+
+            toast.success(`Pedido creado con éxito. ID: ${data.id}`, { id: toastId });
+            console.log('Orden de Planet creada:', data);
+            
+        } catch (error) {
+            console.error('Error ordering Planet image:', error);
+            alert(`Error al crear pedido: ${error instanceof Error ? error.message : 'Error desconocido'}`);
         }
     };
 
@@ -1125,12 +1221,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                     <DownloadTab
                         sentinelChecked={sentinelChecked}
                         planetChecked={planetChecked}
+                        engineChecked={engineChecked}
                         startDate={startDate}
                         endDate={endDate}
                         selectedName={selectedName}
                         isSearching={isSearching}
                         onSentinelChange={setSentinelChecked}
                         onPlanetChange={setPlanetChecked}
+                        onEngineChange={setEngineChecked}
                         onStartDateChange={setStartDate}
                         onEndDateChange={setEndDate}
                         onFileChange={handleFileChange}
@@ -1142,6 +1240,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                     <SatelliteTab
                         searchResults={searchResults}
                         onDownloadImage={handleDownloadImage}
+                        onOrderImage={handleOrderPlanetImage}
                     />
                 );
             case 'analisis':

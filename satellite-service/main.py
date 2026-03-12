@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import ee
 import json
 import os
@@ -66,6 +66,28 @@ class DownloadResponse(BaseModel):
     bands: List[str]
     scale: float
 
+class SearchPlanetRequest(BaseModel):
+    geometry: Optional[Union[Dict[str, Any], List[Any]]] = None
+    date_start: str
+    date_end: str
+    item_types: Optional[List[str]] = ["PSScene"]
+    max_cloud_cover: Optional[float] = 100.0
+    api_key: str
+
+class OrderPlanetRequest(BaseModel):
+    name: str
+    item_ids: List[str]
+    item_type: str = "PSScene"
+    bundle: str = "analytic_sr_udm2"
+    geometry: Optional[Union[Dict[str, Any], List[Any]]] = None
+    api_key: str
+
+# Helper para autenticación de Planet
+def get_planet_auth(api_key: str):
+    import requests
+    from requests.auth import HTTPBasicAuth
+    return HTTPBasicAuth(api_key, "")
+
 # Inicializar Google Earth Engine
 def initialize_ee():
     try:
@@ -125,11 +147,14 @@ async def search_images(request: SearchRequest):
         geometry = ee.Geometry.Polygon([request.bounds])
         
         # Crear colección de imágenes
+        # Propiedad de nubes cambia según la colección
+        cloud_prop = 'CLOUD_COVER' if 'LANDSAT' in request.collection else 'CLOUDY_PIXEL_PERCENTAGE'
+        
         collection = ee.ImageCollection(request.collection) \
             .filterBounds(geometry) \
             .filterDate(request.date_start, request.date_end) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', request.max_cloud_cover)) \
-            .sort('CLOUDY_PIXEL_PERCENTAGE')
+            .filter(ee.Filter.lt(cloud_prop, request.max_cloud_cover)) \
+            .sort(cloud_prop)
         
         # Obtener información de las imágenes
         images_info = collection.limit(50).getInfo()
@@ -138,16 +163,22 @@ async def search_images(request: SearchRequest):
         for img in images_info['features']:
             properties = img['properties']
             
+            # Bandas típicas dependiendo de la colección
+            if "LANDSAT" in request.collection:
+                default_bands = ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7", "ST_B10"]
+            else:
+                default_bands = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B9", "B10", "B11", "B12"]
+
             # Extraer información de la imagen
             image_data = SatelliteImage(
                 id=properties.get('PRODUCT_ID', '').split('_')[-1] if 'PRODUCT_ID' in properties else img['id'],
                 full_id=img['id'],
                 date=properties.get('PRODUCT_ID', '').split('_')[2][:8] if 'PRODUCT_ID' in properties else properties.get('DATE_ACQUIRED', ''),
-                cloud_coverage=properties.get('CLOUDY_PIXEL_PERCENTAGE', 0),
-                bands=["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B9", "B10", "B11", "B12"],  # Bandas típicas de Sentinel-2
-                product_id=properties.get('PRODUCT_ID', ''),
-                spacecraft=properties.get('SPACECRAFT_ID', ''),
-                orbit=properties.get('SENSING_ORBIT_NUMBER', 0)
+                cloud_coverage=properties.get('CLOUDY_PIXEL_PERCENTAGE', properties.get('CLOUD_COVER', 0)),
+                bands=default_bands,
+                product_id=properties.get('PRODUCT_ID', properties.get('LANDSAT_PRODUCT_ID', '')),
+                spacecraft=properties.get('SPACECRAFT_ID', properties.get('SPACECRAFT_ID', 'Landsat') if "LANDSAT" in request.collection else ''),
+                orbit=properties.get('SENSING_ORBIT_NUMBER', properties.get('WRS_PATH', 0))
             )
             
             # Formatear fecha
@@ -175,6 +206,11 @@ async def download_image(request: DownloadRequest):
         # Obtener la imagen
         image = ee.Image(request.image_id)
         
+        # Adaptar bandas por defecto si es Landsat
+        if request.bands == ["B4", "B3", "B2"] and "LANDSAT" in request.image_id:
+            request.bands = ["SR_B4", "SR_B3", "SR_B2"]
+            logger.info("Bandas ajustadas automáticamente para RGB en Landsat: SR_B4, SR_B3, SR_B2")
+
         # Seleccionar bandas
         if request.bands:
             image = image.select(request.bands)
@@ -207,6 +243,25 @@ async def download_image(request: DownloadRequest):
                     bands=request.bands
                 )
                 logger.info(f"Aplicada visualización genérica para bandas: {request.bands}")
+                
+        elif request.enhance_visualization and "LANDSAT" in request.image_id:
+            logger.info("Aplicando mejoras de visualización para Landsat 8/9")
+            
+            # Landsat 8/9 SR típicamente se visualiza mejor entre 7000 y 16000 para RGB
+            if request.bands == ["SR_B4", "SR_B3", "SR_B2"]:  # RGB Natural Landsat
+                image = image.visualize(
+                    min=7000,
+                    max=16000,
+                    bands=request.bands
+                )
+                logger.info("Aplicada visualización RGB natural Landsat (SR_B4,SR_B3,SR_B2)")
+            else:
+                image = image.visualize(
+                    min=7000,
+                    max=16000,
+                    bands=request.bands
+                )
+                logger.info(f"Aplicada visualización Landsat para bandas: {request.bands}")
                 
         elif request.visualization_params:
             # Usar parámetros de visualización personalizados
@@ -324,6 +379,182 @@ async def get_available_bands(collection_name: str):
     except Exception as e:
         logger.error(f"Error obteniendo bandas: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo bandas: {str(e)}")
+
+# --- Endpoints de Planet API ---
+
+@app.post("/planet/search")
+async def search_planet_images(request: SearchPlanetRequest):
+    import requests
+    try:
+        logger.info(f"Buscando imágenes en Planet para el periodo {request.date_start} a {request.date_end}")
+        
+        # Formatear la geometría para Planet API (GeoJSON)
+        # Frontend envía list de [lat, lng]. Planet espera Polygon con [[[lon, lat], ...]]]
+        planet_geom = request.geometry
+        
+        # Si es un dict (GeoJSON format completo)
+        if isinstance(planet_geom, dict) and "type" in planet_geom and planet_geom["type"].lower() == "polygon":
+             pass # Ya está bien formado
+        # Si es una lista, Laravel nos asegura que es un array de pares [lng, lat]
+        elif isinstance(planet_geom, list):
+             # Por seguridad, si el primer elemento no es una lista, algo está mal
+             if len(planet_geom) > 0 and isinstance(planet_geom[0], list):
+                 # Envolver en un array adicional para cumplir con la especificación Polygon
+                 planet_geom = {
+                    "type": "Polygon",
+                    "coordinates": [planet_geom]
+                 }
+        
+        # Construir filtro de búsqueda de Planet
+        search_filter = {
+            "type": "AndFilter",
+            "config": [
+                {
+                    "type": "GeometryFilter",
+                    "field_name": "geometry",
+                    "config": planet_geom
+                },
+                {
+                    "type": "DateRangeFilter",
+                    "field_name": "acquired",
+                    "config": {
+                        "gte": f"{request.date_start}T00:00:00Z",
+                        "lte": f"{request.date_end}T23:59:59Z"
+                    }
+                },
+                {
+                    "type": "RangeFilter",
+                    "field_name": "cloud_cover",
+                    "config": {
+                        "lte": request.max_cloud_cover / 100.0
+                    }
+                }
+            ]
+        }
+        
+        payload = {
+            "item_types": request.item_types,
+            "filter": search_filter
+        }
+        
+        auth = get_planet_auth(request.api_key)
+        response = requests.post(
+            "https://api.planet.com/data/v1/quick-search",
+            auth=auth,
+            json=payload
+        )
+        
+        if not response.ok:
+            logger.error(f"Error en Planet Search API: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Error en Planet API: {response.text}")
+            
+        data = response.json()
+        
+        # Transformar resultados al formato que espera el frontend
+        results = []
+        for feature in data.get('features', []):
+            props = feature.get('properties', {})
+            results.append({
+                "id": feature.get('id'),
+                "full_id": feature.get('id'),
+                "date": props.get('acquired', '').split('T')[0],
+                "cloud_coverage": round(props.get('cloud_cover', 0) * 100, 2),
+                "bands": ["RGB", "NIR", "UDM2"], # Resumen de bandas comunes en PSScene
+                "product_id": feature.get('id'),
+                "spacecraft": props.get('satellite_id', 'PlanetScope'),
+                "orbit": 0, # Planet no expone esto directamente igual que Sentinel
+                "item_type": feature.get('properties', {}).get('item_type')
+            })
+            
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error en búsqueda de Planet: {str(e)}")
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/planet/order")
+async def order_planet_images(request: OrderPlanetRequest):
+    import requests
+    try:
+        logger.info(f"Creando orden en Planet: {request.name}")
+        
+        # Estructura del pedido (Order)
+        payload = {
+            "name": request.name,
+            "products": [
+                {
+                    "item_ids": request.item_ids,
+                    "item_type": request.item_type,
+                    "product_bundle": request.bundle
+                }
+            ]
+        }
+        
+        # Si se proporciona geometría, aplicar clip
+        if request.geometry:
+            planet_geom = request.geometry
+            # Si es un dict (GeoJSON format completo)
+            if isinstance(planet_geom, dict) and "type" in planet_geom and planet_geom["type"].lower() == "polygon":
+                 pass # Ya está bien formado
+            # Si es una lista, Laravel nos asegura que es un array de pares [lng, lat]
+            elif isinstance(planet_geom, list):
+                 # Por seguridad, si el primer elemento no es una lista, algo está mal
+                 if len(planet_geom) > 0 and isinstance(planet_geom[0], list):
+                     # Envolver en un array adicional para cumplir con la especificación Polygon
+                     planet_geom = {
+                        "type": "Polygon",
+                        "coordinates": [planet_geom]
+                     }
+
+            payload["tools"] = [
+                {
+                    "clip": {
+                        "aoi": planet_geom
+                    }
+                }
+            ]
+            
+        auth = get_planet_auth(request.api_key)
+        response = requests.post(
+            "https://api.planet.com/compute/ops/orders/v2",
+            auth=auth,
+            json=payload
+        )
+        
+        if not response.ok:
+            logger.error(f"Error en Planet Orders API: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Error en Planet API: {response.text}")
+            
+        return response.json()
+        
+    except Exception as e:
+        logger.error(f"Error en pedido de Planet: {str(e)}")
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/planet/order/{order_id}")
+async def get_planet_order_status(order_id: str, api_key: str):
+    import requests
+    try:
+        logger.info(f"Consultando estado de orden Planet: {order_id}")
+        
+        auth = get_planet_auth(api_key)
+        response = requests.get(
+            f"https://api.planet.com/compute/ops/orders/v2/{order_id}",
+            auth=auth
+        )
+        
+        if not response.ok:
+            logger.error(f"Error consultando orden Planet: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Error Planet API: {response.text}")
+            
+        return response.json()
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de pedido Planet: {str(e)}")
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/convert-image")
 async def convert_image(

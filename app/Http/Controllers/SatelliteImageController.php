@@ -262,9 +262,12 @@ class SatelliteImageController extends Controller
       try {
           $order = PlanetOrder::where('order_id', $order_id)->firstOrFail();
 
+          /* 
+          // Comentado para permitir refrescar URLs con la nueva lógica incluso si ya es 'success'
           if ($order->status === 'success' || $order->status === 'failed') {
               return response()->json($order);
           }
+          */
 
           $response = Http::timeout(30)->get($this->satelliteServiceUrl . '/planet/order/' . $order_id, [
               'api_key' => env('PLANET_API_KEY')
@@ -274,8 +277,36 @@ class SatelliteImageController extends Controller
               $data = $response->json();
               $order->status = $data['state'] ?? $order->status;
               
-              if ($order->status === 'success' && isset($data['_links']['results'][0]['location'])) {
-                  $order->download_url = $data['_links']['results'][0]['location'];
+              if ($order->status === 'success' && isset($data['_links']['results'])) {
+                  $results = $data['_links']['results'];
+                  $best_url = null;
+                  $highest_priority = -1;
+
+                  foreach ($results as $result) {
+                      $name = $result['name'] ?? '';
+                      $current_priority = 0;
+
+                      if (str_ends_with($name, '.zip')) {
+                          $current_priority = 10;
+                      } elseif (str_ends_with($name, '.tif') || str_ends_with($name, '.tiff')) {
+                          $current_priority = 5;
+                          // Priorizar imágenes analíticas sobre máscaras
+                          if (str_contains($name, 'AnalyticMS') || str_contains($name, 'ortho')) {
+                              $current_priority = 8;
+                          }
+                      } elseif (str_ends_with($name, '.json') || str_ends_with($name, '.xml')) {
+                          $current_priority = 1;
+                      }
+
+                      if ($current_priority > $highest_priority) {
+                          $highest_priority = $current_priority;
+                          $best_url = $result['location'];
+                      }
+                  }
+
+                  if ($best_url) {
+                      $order->download_url = $best_url;
+                  }
               }
 
               $order->save();

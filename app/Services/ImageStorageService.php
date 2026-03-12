@@ -74,7 +74,7 @@ class ImageStorageService
 
         } catch (Exception $e) {
             // Limpiar archivo si hubo error
-            if (isset($uploadedPath) && Storage::disk($this->disk)->exists($uploadedPath)) {
+            if (isset($uploadedPath) && is_string($uploadedPath) && Storage::disk($this->disk)->exists($uploadedPath)) {
                 Storage::disk($this->disk)->delete($uploadedPath);
             }
             throw $e;

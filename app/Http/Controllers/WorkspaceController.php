@@ -210,18 +210,6 @@ class WorkspaceController extends Controller
 
     $user = $request->user();
 
-    if ($request->type === 'personal') {
-      $existingPersonal = $user->ownedWorkspaces()
-        ->where('type', 'personal')
-        ->exists();
-
-      if ($existingPersonal) {
-        return response()->json([
-          'success' => false,
-          'message' => 'Ya tienes un espacio de trabajo personal',
-        ], 422);
-      }
-    }
 
     $workspace = $user->ownedWorkspaces()->create([
       'name' => $request->name,

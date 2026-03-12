@@ -64,7 +64,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Get workspaces created by user or where user is a member
     $workspaces = \App\Models\Workspace::where(function ($query) use ($user, $workspaceUsers) {
-      $query->where('created_by', $user->_id)
+      $query->where('owner_id', $user->_id)
         ->orWhereIn('_id', $workspaceUsers);
     })
       ->get(['_id', 'name'])
@@ -88,17 +88,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     return Inertia::render('SatelliteImages');
   })->name('satellite-images');
 
-  Route::get('procesar-imagenes', function () {
-    return Inertia::render('procesar-imagenes');
-  })->name('procesar-imagenes');
-
-  Route::get('espacios-trabajo', function () {
-    return Inertia::render('espacios-trabajo');
-  })->name('espacios-trabajo');
-
-  Route::get('satellite-images', function () {
-    return Inertia::render('SatelliteImages');
-  })->name('satellite-images');
 
   // Página dedicada para imágenes de workspace
   Route::get('workspaces/{workspace}/images', function ($workspaceId) {

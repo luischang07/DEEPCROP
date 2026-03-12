@@ -491,6 +491,11 @@ async def order_planet_images(request: OrderPlanetRequest):
             ]
         }
         
+        payload["delivery"] = {
+            "archive_type": "zip",
+            "single_archive": True
+        }
+
         # Si se proporciona geometría, aplicar clip
         if request.geometry:
             planet_geom = request.geometry

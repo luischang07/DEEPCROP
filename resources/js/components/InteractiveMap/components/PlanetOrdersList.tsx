@@ -43,10 +43,19 @@ export const PlanetOrdersList: React.FC = () => {
     };
 
     const handleDownload = (url: string, name: string) => {
+        // Intentar detectar la extensión real de la URL de Planet
+        // Los tokens de Planet a veces contienen el nombre del archivo original
+        let extension = '.zip';
+        if (url.toLowerCase().includes('.tif')) extension = '.tif';
+        else if (url.toLowerCase().includes('.json')) extension = '.json';
+        
         const link = document.createElement('a');
         link.href = url;
         link.target = '_blank';
-        link.download = `${name || 'planet_order'}.zip`;
+        // Si el nombre ya termina en la extensión, no la repetimos
+        const fileName = name || 'planet_order';
+        link.download = fileName.endsWith(extension) ? fileName : `${fileName}${extension}`;
+        
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

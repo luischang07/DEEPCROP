@@ -270,10 +270,18 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({
                     id="file-upload-input"
                     type="file"
                     onChange={onFileChange}
-                    accept="image/*,.tiff,.tif,.geojson,.json"
+                    accept="image/*,.tiff,.tif,.geojson,.json,.kmz"
                     className="hidden"
                 />
-                <p className="text-xs text-gray-500 mt-2">Formatos soportados: JPG, PNG, TIFF, GeoJSON</p>
+                <p className="text-xs text-gray-500 mt-2">Formatos soportados: JPG, PNG, TIFF, GeoJSON, KMZ</p>
+                <div className="mt-4 p-2 bg-gray-50 rounded border border-gray-200 text-left">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Resolución Nativa:</p>
+                    <ul className="text-[10px] space-y-0.5 text-gray-500">
+                        <li>• <span className="font-semibold text-indigo-600">Planet Scope:</span> ~3m (Máxima nitidez)</li>
+                        <li>• <span className="font-semibold text-blue-600">Sentinel-2:</span> 10m (Alta resolución)</li>
+                        <li>• <span className="font-semibold text-amber-600">Landsat 8/9:</span> 15m (Mejorado)</li>
+                    </ul>
+                </div>
 
                 {/* Dialog para seleccionar archivo del workspace */}
                 <Dialog open={showLoadDialog} onClose={() => setShowLoadDialog(false)} fullWidth maxWidth="sm">

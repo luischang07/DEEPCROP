@@ -206,75 +206,6 @@ async def download_image(request: DownloadRequest):
         # Obtener la imagen
         image = ee.Image(request.image_id)
         
-        # Adaptar bandas por defecto si es Landsat
-        if request.bands == ["B4", "B3", "B2"] and "LANDSAT" in request.image_id:
-            request.bands = ["SR_B4", "SR_B3", "SR_B2"]
-            logger.info("Bandas ajustadas automáticamente para RGB en Landsat: SR_B4, SR_B3, SR_B2")
-
-        # Seleccionar bandas
-        if request.bands:
-            image = image.select(request.bands)
-        
-        # Aplicar mejoras de visualización para Sentinel-2
-        if request.enhance_visualization and "COPERNICUS/S2" in request.image_id:
-            logger.info("Aplicando mejoras de visualización para Sentinel-2")
-            
-            # Para Sentinel-2 Surface Reflectance, aplicar normalización estándar
-            # Los valores típicos para visualización RGB están entre 0-3000
-            if request.bands == ["B4", "B3", "B2"]:  # RGB Natural
-                image = image.visualize(
-                    min=0,
-                    max=3000,
-                    bands=request.bands
-                )
-                logger.info("Aplicada visualización RGB natural (B4,B3,B2)")
-            elif request.bands == ["B8", "B4", "B3"]:  # False color (infrarrojo)
-                image = image.visualize(
-                    min=0,
-                    max=3000,
-                    bands=request.bands
-                )
-                logger.info("Aplicada visualización falso color (B8,B4,B3)")
-            else:
-                # Visualización genérica para otras combinaciones
-                image = image.visualize(
-                    min=0,
-                    max=3000,
-                    bands=request.bands
-                )
-                logger.info(f"Aplicada visualización genérica para bandas: {request.bands}")
-                
-        elif request.enhance_visualization and "LANDSAT" in request.image_id:
-            logger.info("Aplicando mejoras de visualización para Landsat 8/9")
-            
-            # Landsat 8/9 SR típicamente se visualiza mejor entre 7000 y 16000 para RGB
-            if request.bands == ["SR_B4", "SR_B3", "SR_B2"]:  # RGB Natural Landsat
-                image = image.visualize(
-                    min=7000,
-                    max=16000,
-                    bands=request.bands
-                )
-                logger.info("Aplicada visualización RGB natural Landsat (SR_B4,SR_B3,SR_B2)")
-            else:
-                image = image.visualize(
-                    min=7000,
-                    max=16000,
-                    bands=request.bands
-                )
-                logger.info(f"Aplicada visualización Landsat para bandas: {request.bands}")
-                
-        elif request.visualization_params:
-            # Usar parámetros de visualización personalizados
-            logger.info("Aplicando parámetros de visualización personalizados")
-            min_val = request.visualization_params.get('min', 0)
-            max_val = request.visualization_params.get('max', 3000)
-            
-            image = image.visualize(
-                min=min_val,
-                max=max_val,
-                bands=request.bands
-            )
-        
         # Definir región si se proporciona
         region = None
         if request.region:
@@ -283,15 +214,71 @@ async def download_image(request: DownloadRequest):
             else:
                 geometries = [ee.Geometry.Polygon(coords) for coords in request.region]
                 region = ee.Geometry.MultiPolygon(geometries)
+            
+            # Recortar la imagen al área de interés (AOI)
+            image = image.clip(region)
+            logger.info("Imagen recortada a la región proporcionada")
+
+        # Caso especial: Descarga de todas las bandas (Si se solicita "ALL" o una lista vacía de bandas, pero en la práctica el frontend pedirá específicas)
+        # Si el usuario pide una lista de bandas (ej: [B4, B3, B2, B8]), las seleccionamos
+        if request.bands:
+            # Si se pide una banda especial "ALL", seleccionamos todas las disponibles
+            if "ALL" in [b.upper() for b in request.bands]:
+                logger.info("Se solicitan todas las bandas disponibles")
+                # No hacemos select, nos quedamos con todas
+            else:
+                # Adaptar bandas por defecto si es Landsat
+                if request.bands == ["B4", "B3", "B2"] and "LANDSAT" in request.image_id:
+                    request.bands = ["SR_B4", "SR_B3", "SR_B2"]
+                    logger.info("Bandas ajustadas automáticamente para RGB en Landsat: SR_B4, SR_B3, SR_B2")
+                
+                image = image.select(request.bands)
         
-        # Estrategia de escalado conservador para evitar el error de tamaño
+        # --- Lógica de Visualización vs Datos Crudos ---
+        # Solo aplicamos .visualize() si:
+        # 1. enhance_visualization es True Y
+        # 2. Se solicitan 3 bandas o menos (típico para RGB o Infrarrojo color)
+        # Si se solicitan más de 3 bandas, es probable que se quiera análisis, así que NO visualizamos.
+        
+        is_all_bands = any(b.upper() == "ALL" for b in request.bands) if request.bands else False
+        num_bands = len(request.bands) if request.bands else 0
+        should_visualize = request.enhance_visualization and num_bands > 0 and num_bands <= 3 and not is_all_bands
+
+        if should_visualize:
+            if "COPERNICUS/S2" in request.image_id:
+                logger.info("Aplicando mejoras de visualización para Sentinel-2")
+                
+                # Los valores típicos para visualización RGB están entre 0-3000
+                if request.bands == ["B4", "B3", "B2"]:  # RGB Natural
+                    image = image.visualize(min=0, max=3000, bands=request.bands)
+                    logger.info("Aplicada visualización RGB natural (B4,B3,B2)")
+                elif request.bands == ["B8", "B4", "B3"]:  # False color
+                    image = image.visualize(min=0, max=3000, bands=request.bands)
+                    logger.info("Aplicada visualización falso color (B8,B4,B3)")
+                else:
+                    image = image.visualize(min=0, max=3000, bands=request.bands)
+                    logger.info(f"Aplicada visualización genérica para bandas: {request.bands}")
+                    
+            elif "LANDSAT" in request.image_id:
+                logger.info("Aplicando mejoras de visualización para Landsat 8/9")
+                image = image.visualize(min=7000, max=16000, bands=request.bands)
+                logger.info(f"Aplicada visualización Landsat para bandas: {request.bands}")
+                    
+            elif request.visualization_params:
+                logger.info("Aplicando parámetros de visualización personalizados")
+                min_val = request.visualization_params.get('min', 0)
+                max_val = request.visualization_params.get('max', 3000)
+                image = image.visualize(min=min_val, max=max_val, bands=request.bands)
+        else:
+            logger.info(f"Generando descarga de datos crudos (num_bands: {num_bands}, enhance: {request.enhance_visualization})")
+        
+        # Estrategia de escalado
         scale = request.scale
         max_attempts = 5
         attempt = 0
         
         while attempt < max_attempts:
             try:
-                # Generar URL de descarga con escala actual
                 url_params = {
                     'scale': scale,
                     'format': 'GeoTIFF',
@@ -304,8 +291,7 @@ async def download_image(request: DownloadRequest):
                 logger.info(f"Intento {attempt + 1}: Generando URL con escala {scale}m")
                 download_url = image.getDownloadURL(url_params)
                 
-                # Si llegamos aquí, la URL se generó exitosamente
-                response = DownloadResponse(
+                return DownloadResponse(
                     download_url=download_url,
                     status="success",
                     image_id=request.image_id,
@@ -313,41 +299,22 @@ async def download_image(request: DownloadRequest):
                     scale=scale
                 )
                 
-                logger.info(f"URL de descarga generada exitosamente con escala {scale}m")
-                return response
-                
             except Exception as e:
                 error_msg = str(e)
                 if "Total request size" in error_msg and "must be less than or equal to" in error_msg:
-                    # Error de tamaño - aumentar escala (reducir resolución)
-                    old_scale = scale
-                    scale = scale * 1.5  # Incremento del 50%
+                    scale = scale * 1.5
                     attempt += 1
-                    logger.warning(f"Archivo demasiado grande con escala {old_scale}m. Intentando con {scale}m (intento {attempt})")
-                    
+                    logger.warning(f"Tamaño excedido. Reintentando con escala {scale}m")
                     if attempt >= max_attempts:
-                        # Como último recurso, usar una escala muy grande
                         scale = 100.0
-                        logger.warning(f"Último intento con escala {scale}m")
-                        
-                        url_params['scale'] = scale
-                        download_url = image.getDownloadURL(url_params)
-                        
-                        response = DownloadResponse(
-                            download_url=download_url,
-                            status="success",
-                            image_id=request.image_id,
-                            bands=request.bands or [],
-                            scale=scale
+                        download_url = image.getDownloadURL({**url_params, 'scale': scale})
+                        return DownloadResponse(
+                            download_url=download_url, status="success",
+                            image_id=request.image_id, bands=request.bands or [], scale=scale
                         )
-                        
-                        logger.info(f"URL de descarga generada con escala de emergencia {scale}m")
-                        return response
                 else:
-                    # Error diferente - propagar
                     raise e
         
-        # Si llegamos aquí, todos los intentos fallaron
         raise Exception("No se pudo generar URL de descarga después de varios intentos")
     
     except Exception as e:

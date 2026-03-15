@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import JSZip from 'jszip';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
@@ -373,16 +374,36 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
         try {
             console.log('Descargando imagen:', { imageId, bandName });
             
+            const isRaw = bandName === 'ALL_BANDS' || (!bandName.includes(',') && !['B4', 'B3', 'B2', 'B8', 'B11', 'B12'].includes(bandName));
+            
+            let bandsArr: string[];
+            if (bandName === 'ALL_BANDS') {
+                bandsArr = ['ALL'];
+            } else if (bandName.includes(',')) {
+                bandsArr = bandName.split(',');
+            } else {
+                bandsArr = [bandName];
+            }
+
+            const payload: any = {
+                image_id: imageId,
+                bands: bandsArr,
+                enhance_visualization: !isRaw,
+            };
+
+            // Incluir el área seleccionada como región para el recorte (clip)
+            if (geoJson && geoJson.geometry) {
+                payload.region = geoJson.geometry.coordinates;
+                console.log('Región de recorte incluida en la descarga:', payload.region);
+            }
+
             const response = await fetch('/api/satellite/download', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 },
-                body: JSON.stringify({
-                    image_id: imageId,
-                    band_name: bandName
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
@@ -508,6 +529,82 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                 };
                 reader.readAsText(file);
                 return; // Stop here, no need to extract image coordinates
+            }
+
+            // Check if it's a KMZ file
+            if (file.name.toLowerCase().endsWith('.kmz')) {
+                console.log('=== PROCESANDO ARCHIVO KMZ ===');
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const arrayBuffer = e.target?.result as ArrayBuffer;
+                        const zip = new JSZip();
+                        const zipContent = await zip.loadAsync(arrayBuffer);
+                        
+                        // Encontrar el archivo KML principal (usualmente doc.kml)
+                        const kmlFile = Object.keys(zipContent.files).find(name => name.toLowerCase().endsWith('.kml'));
+                        
+                        if (!kmlFile) {
+                            alert('No se encontró un archivo KML dentro del KMZ.');
+                            return;
+                        }
+
+                        const kmlContent = await zipContent.files[kmlFile].async('string');
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(kmlContent, 'text/xml');
+                        
+                        let geometryCoords: number[][] = [];
+                        let type: 'polygon' | 'marker' = 'polygon';
+
+                        // Buscar polígonos
+                        const polygons = xmlDoc.getElementsByTagName('Polygon');
+                        if (polygons.length > 0) {
+                            const coordNode = polygons[0].getElementsByTagName('coordinates')[0];
+                            if (coordNode) {
+                                const coordText = coordNode.textContent || '';
+                                geometryCoords = coordText.trim().split(/\s+/).map(coordStr => {
+                                    const [lng, lat] = coordStr.split(',').map(Number);
+                                    return [lat, lng]; // Leaflet usa [lat, lng]
+                                });
+                                type = 'polygon';
+                            }
+                        } else {
+                            // Buscar puntos si no hay polígonos
+                            const points = xmlDoc.getElementsByTagName('Point');
+                            if (points.length > 0) {
+                                const coordNode = points[0].getElementsByTagName('coordinates')[0];
+                                if (coordNode) {
+                                    const coordText = coordNode.textContent || '';
+                                    const [lng, lat] = coordText.trim().split(',').map(Number);
+                                    geometryCoords = [[lat, lng]];
+                                    type = 'marker';
+                                }
+                            }
+                        }
+
+                        if (geometryCoords.length > 0) {
+                            const centerLat = geometryCoords.reduce((sum, c) => sum + c[0], 0) / geometryCoords.length;
+                            const centerLng = geometryCoords.reduce((sum, c) => sum + c[1], 0) / geometryCoords.length;
+
+                            const coordinateData = {
+                                lat: centerLat,
+                                lng: centerLng,
+                                zoom: 14,
+                                coordinates: type === 'polygon' ? geometryCoords : undefined,
+                                type: type
+                            };
+
+                            renderCoordinatesOnMap(coordinateData, file.name);
+                        } else {
+                            alert('No se encontraron geometrías válidas en el archivo KMZ.');
+                        }
+                    } catch (err) {
+                        console.error('Error parsing KMZ:', err);
+                        alert('Error al leer el archivo KMZ.');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+                return;
             }
 
             // Auto-seleccionar coordenadas y ajustar zoom para imágenes

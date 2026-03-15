@@ -16,9 +16,11 @@ import {
     MoreVertical,
     Image as ImageIcon,
     Camera,
-    ExternalLink
+    ExternalLink,
+    Activity
 } from 'lucide-react';
 import { WorkspaceDetail, WorkspaceFile, WorkspaceImage } from '../types/workspace';
+import { InferenceJob, aiApi } from '../services/aiApi';
 import { workspaceApi } from '../services/workspaceApi';
 import { imageApi } from '../services/imageApi';
 import { FileUploadModal } from './FileUploadModal';
@@ -32,6 +34,7 @@ import { ImageEditModal } from './ImageEditModal';
 import { ImageViewModal } from './ImageViewModal';
 import { RenameImageModal } from './RenameImageModal';
 import { DeleteImageModal } from './DeleteImageModal';
+import { InferenceList } from './InferenceList';
 
 interface WorkspaceDetailViewProps {
     workspaceId: string;
@@ -45,7 +48,7 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     const [workspace, setWorkspace] = useState<WorkspaceDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'files' | 'images'>('files');
+    const [activeTab, setActiveTab] = useState<'files' | 'images' | 'inferences'>('files');
     
     // Estados para archivos
     const [showUploadModal, setShowUploadModal] = useState(false);
@@ -60,6 +63,10 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     const [images, setImages] = useState<WorkspaceImage[]>([]);
     const [imagesLoading, setImagesLoading] = useState(false);
     const [filesLoading, setFilesLoading] = useState(false);
+    
+    // Estados para inferencias
+    const [inferences, setInferences] = useState<InferenceJob[]>([]);
+    const [inferencesLoading, setInferencesLoading] = useState(false);
     const [filesMeta, setFilesMeta] = useState<{ current_page: number; per_page: number; total: number; last_page: number } | null>(null);
     const [filesPage, setFilesPage] = useState(1);
     const [showImageUploadModal, setShowImageUploadModal] = useState(false);
@@ -95,6 +102,10 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         // y no hemos cargado imágenes recientemente
         if (activeTab === 'images' && images.length === 0 && !imagesLoading) {
             loadImages();
+        }
+
+        if (activeTab === 'inferences' && inferences.length === 0 && !inferencesLoading) {
+            loadInferences();
         }
     }, [activeTab]);
 
@@ -148,6 +159,18 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
             console.error('Error loading files:', err);
         } finally {
             setFilesLoading(false);
+        }
+    };
+
+    const loadInferences = async () => {
+        try {
+            setInferencesLoading(true);
+            const data = await aiApi.getInferences(workspaceId);
+            setInferences(data);
+        } catch (err) {
+            console.error('Error loading inferences:', err);
+        } finally {
+            setInferencesLoading(false);
         }
     };
 
@@ -298,6 +321,20 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         setSelectedImageForDelete(null);
     };
 
+    const handleInferenceDelete = async (jobId: string) => {
+        if (!confirm('¿Estás seguro de que quieres eliminar esta inferencia? Se borrarán permanentemente los archivos asociados en MinIO.')) {
+            return;
+        }
+
+        try {
+            await aiApi.deleteInference(jobId);
+            setInferences(prev => prev.filter(inf => inf.job_id !== jobId));
+        } catch (err) {
+            console.error('Error deleting inference:', err);
+            alert('Error al eliminar la inferencia');
+        }
+    };
+
     const canEdit = workspace && ['owner', 'editor'].includes(workspace.user_role);
     const canManage = workspace && workspace.user_role === 'owner';
 
@@ -408,6 +445,19 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                             Imágenes ({images.length})
                         </div>
                     </button>
+                    <button
+                        onClick={() => setActiveTab('inferences')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                            activeTab === 'inferences'
+                                ? 'border-indigo-500 text-indigo-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4" />
+                            Inferencias ({inferences.length})
+                        </div>
+                    </button>
                 </nav>
             </div>
 
@@ -477,7 +527,7 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                         </>
                     )}
                 </div>
-            ) : (
+            ) : activeTab === 'images' ? (
                 /* Images Section */
                 <div>
                     <div className="flex items-center justify-between mb-4">
@@ -506,6 +556,28 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                             onRefresh={loadImages}
                         />
                     )}
+                </div>
+            ) : (
+                /* Inferences Section */
+                <div>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900">Análisis e Inferencias</h2>
+                        <div className="flex items-center gap-2">
+                            {inferences.length > 0 && (
+                                <div className="text-sm text-gray-500">
+                                    {inferences.length} análisis
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <InferenceList
+                        workspaceId={workspaceId}
+                        inferences={inferences}
+                        loading={inferencesLoading}
+                        onDelete={handleInferenceDelete}
+                        onRefresh={loadInferences}
+                    />
                 </div>
             )}
 

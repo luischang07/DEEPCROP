@@ -1,7 +1,10 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
-import { Upload, Play, Settings, RefreshCw, AlertCircle, CheckCircle, FileImage, Database, Activity } from 'lucide-react';
+import { 
+  Upload, Play, Settings, RefreshCw, AlertCircle, CheckCircle, 
+  FileImage, Database, Activity, Download, FileText, Image as ImageIcon 
+} from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -17,13 +20,22 @@ interface Model {
 }
 
 interface InferenceStatus {
+  job_id?: string;
   status: string;
   progress: number;
   output_path?: string;
+  preview_url?: string;
   stats?: {
     anomaly_percentage: number;
   };
-  error_message?: string;
+  stress_severity?: string;
+  anomaly_percentage_in_crop?: number;
+  job_metadata?: {
+    preview_path?: string;
+    mask_path?: string;
+    visualization_path?: string;
+    minio_keys?: Record<string, string>;
+  };
 }
 
 interface TrainingStatus {
@@ -40,7 +52,7 @@ interface TrainingStatus {
   error_message?: string;
 }
 
-export default function AIModel() {
+export default function AIModel({ workspaces = [] }: { workspaces: { id: string, name: string }[] }) {
   const [activeTab, setActiveTab] = useState<'inference' | 'training' | 'upload'>('inference');
 
   // Common State
@@ -53,10 +65,14 @@ export default function AIModel() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [threshold, setThreshold] = useState(0.5);
   const [stride, setStride] = useState(256);
+  const [useWaterStress, setUseWaterStress] = useState(false);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(workspaces.length > 0 ? workspaces[0].id : '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [result, setResult] = useState<InferenceStatus | null>(null);
+  const [latestInferences, setLatestInferences] = useState<InferenceStatus[]>([]);
+  const [previewType, setPreviewType] = useState('preview');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Training State
@@ -81,6 +97,30 @@ export default function AIModel() {
   useEffect(() => {
     loadModels();
   }, []);
+
+  useEffect(() => {
+    if (selectedWorkspace) {
+      loadLatestInferences(selectedWorkspace);
+    }
+  }, [selectedWorkspace]);
+
+  const loadLatestInferences = async (workspaceId: string) => {
+    try {
+      const response = await fetch(`/api/ai/inferences?workspace_id=${workspaceId}`);
+      const data = await response.json();
+      setLatestInferences(data || []);
+      if (data && data.length > 0 && !isProcessing) {
+        setResult(data[0]);
+        if (data[0].job_metadata?.visualization_path || data[0].stress_severity) {
+          setPreviewType('visualization');
+        } else {
+          setPreviewType('preview');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading inferences:', err);
+    }
+  };
 
   const loadModels = async () => {
     try {
@@ -122,6 +162,10 @@ export default function AIModel() {
     formData.append('model_id', selectedModel);
     formData.append('threshold', threshold.toString());
     formData.append('stride', stride.toString());
+    formData.append('use_water_stress', useWaterStress ? '1' : '0');
+    if (selectedWorkspace) {
+      formData.append('workspace_id', selectedWorkspace);
+    }
 
     try {
       const response = await fetch('/api/ai/predict', {
@@ -162,7 +206,13 @@ export default function AIModel() {
           setIsProcessing(false);
           if (data.status === 'completed') {
             setResult(data);
+            if (data.job_metadata?.visualization_path || data.stress_severity) {
+              setPreviewType('visualization');
+            } else {
+              setPreviewType('preview');
+            }
             setStatusMessage('Prediction completed!');
+            if (selectedWorkspace) loadLatestInferences(selectedWorkspace);
           } else {
             setError(data.error_message || 'Prediction failed');
           }
@@ -312,66 +362,315 @@ export default function AIModel() {
 
         {/* Inference Tab */}
         {activeTab === 'inference' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Settings className="mr-2" size={20} /> Configuration
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Image</label>
-                  <div className="flex items-center gap-2">
-                    <input type="file" accept=".tif,.tiff,image/*" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-                    <button onClick={() => fileInputRef.current?.click()} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md border border-gray-300 flex items-center">
-                      <Upload className="mr-2" size={16} /> Select Image
+          <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Configuration Card */}
+              <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Settings className="mr-2" size={20} /> Configuration
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Image</label>
+                    <div className="flex items-center gap-2">
+                      <input type="file" accept=".tif,.tiff,image/*" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+                      <button onClick={() => fileInputRef.current?.click()} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md border border-gray-300 flex items-center">
+                        <Upload className="mr-2" size={16} /> Select Image
+                      </button>
+                      <span className="text-sm text-gray-600 truncate">{selectedFile ? selectedFile.name : 'No file selected'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
+                    <div className="flex gap-2">
+                      <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        {models.map((m) => (
+                          <option key={m.model_id} value={m.model_id}>{m.model_id} (IoU: {m.final_iou?.toFixed(3)})</option>
+                        ))}
+                      </select>
+                      <button onClick={loadModels} className="p-2 bg-gray-100 rounded-md hover:bg-gray-200"><RefreshCw size={20} /></button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Threshold</label>
+                      <input type="number" step="0.05" min="0" max="1" value={threshold} onChange={(e) => setThreshold(parseFloat(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Stride</label>
+                      <input type="number" step="32" min="32" max="512" value={stride} onChange={(e) => setStride(parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4">
+                    <input
+                      type="checkbox"
+                      id="waterStress"
+                      checked={useWaterStress}
+                      onChange={(e) => setUseWaterStress(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="waterStress" className="text-sm font-medium text-gray-700">
+                      Detección de Estrés Hídrico (6 canales - PlanetScope)
+                    </label>
+                  </div>
+
+                  {workspaces.length > 0 && (
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Workspace (Destino MinIO)</label>
+                      <select 
+                        value={selectedWorkspace} 
+                        onChange={(e) => setSelectedWorkspace(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      >
+                        {workspaces.map(w => (
+                          <option key={w.id} value={w.id}>{w.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status & Results Card (Now only Status + Small Preview) */}
+              <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 flex flex-col">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><Play className="mr-2" size={20} /> Execution</h2>
+                <div className="flex-1 flex flex-col justify-center">
+                  <div className="mb-6">
+                    <div className="flex justify-between text-sm text-gray-600 mb-1">
+                      <span>{statusMessage}</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className={`h-2 rounded-full transition-all duration-300 ${result?.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={startPrediction} 
+                    disabled={!selectedFile || !selectedModel || isProcessing} 
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-medium disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors mb-4"
+                  >
+                    {isProcessing ? 'Processing...' : 'Start Prediction'}
+                  </button>
+
+                  {latestInferences.length > 0 && (
+                    <div className="mt-2 text-sm">
+                      <p className="font-medium text-gray-500 mb-2 border-b pb-1">Historial recientes:</p>
+                      <div className="space-y-1">
+                        {latestInferences.map(inf => (
+                          <div 
+                            key={inf.job_id} 
+                            onClick={() => setResult(inf)}
+                            className={`flex justify-between p-2 rounded cursor-pointer hover:bg-gray-50 ${result?.job_id === inf.job_id ? 'bg-blue-50 border-blue-200 border' : ''}`}
+                          >
+                            <span className="truncate max-w-[150px]">{inf.job_id}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${inf.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {inf.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Full Width Result Visualization */}
+            {result && result.status === 'completed' && (
+              <div className="bg-white rounded-lg shadow-md p-8 border border-gray-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                      <CheckCircle className="text-green-500" size={28} />
+                      Resultados de la Inferencia
+                    </h2>
+                    <p className="text-gray-500">ID del Trabajo: {result.job_id}</p>
+                  </div>
+                  <div className="flex gap-3">
+                    {(useWaterStress || result.stress_severity) && (
+                      <button 
+                        onClick={() => setPreviewType('visualization')}
+                        className={`px-4 py-2 rounded-md font-medium transition-colors ${previewType === 'visualization' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        Visualización Detallada
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setPreviewType('preview')}
+                      className={`px-4 py-2 rounded-md font-medium transition-colors ${previewType === 'preview' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      Vista Previa
                     </button>
-                    <span className="text-sm text-gray-600 truncate">{selectedFile ? selectedFile.name : 'No file selected'}</span>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
-                  <div className="flex gap-2">
-                    <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
-                      {models.map((m) => (
-                        <option key={m.model_id} value={m.model_id}>{m.model_id} (IoU: {m.final_iou?.toFixed(3)})</option>
-                      ))}
-                    </select>
-                    <button onClick={loadModels} className="p-2 bg-gray-100 rounded-md hover:bg-gray-200"><RefreshCw size={20} /></button>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                  <div className="xl:col-span-2 space-y-6">
+                    <div className="relative group">
+                      <img
+                        src={`/api/ai/preview/${result.job_id}?type=${previewType}`}
+                        alt="Result Preview"
+                        className="w-full h-auto rounded-xl border border-gray-200 shadow-lg"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = 'https://placehold.co/800x600?text=Result+Image+Not+Found';
+                        }}
+                      />
+                      <div className="absolute top-4 right-4 bg-white/80 backdrop-blur px-3 py-1 rounded-full text-xs font-bold shadow-sm border border-white">
+                        CAPA: {previewType.toUpperCase()}
+                      </div>
+                    </div>
+
+                    {/* Nueva sección de descargas en formato LISTA - Mejorado */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mt-4">
+                        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2 border-b border-gray-50 pb-3">
+                            <Download className="size-5 text-indigo-600" /> Resultados Disponibles para Descarga
+                        </h3>
+                        <div className="divide-y divide-gray-100">
+                            {/* Fila: Imagen Original */}
+                            <div className="flex items-center justify-between py-4 group">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gray-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                        <ImageIcon className="size-6 text-gray-400 group-hover:text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 leading-tight">Imagen Original</p>
+                                        <p className="text-sm text-gray-500">Imagen de entrada del análisis</p>
+                                    </div>
+                                </div>
+                                <a 
+                                    href={`/api/ai/preview/${result.job_id}?type=original`} 
+                                    download={`${result.job_id}_original${result.job_metadata?.minio_keys?.original ? result.job_metadata.minio_keys.original.substring(result.job_metadata.minio_keys.original.lastIndexOf('.')) : ''}`}
+                                    target="_blank"
+                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-95"
+                                >
+                                    <Download size={14} /> Descargar
+                                </a>
+                            </div>
+
+                            {/* Fila: Capa Overlay */}
+                            <div className="flex items-center justify-between py-4 group">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gray-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                        <FileText className="size-6 text-gray-400 group-hover:text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 leading-tight">Capa Overlay (GeoTIFF)</p>
+                                        <p className="text-sm text-gray-500">Transparencia y georreferencia incluida</p>
+                                    </div>
+                                </div>
+                                <a 
+                                    href={`/api/ai/preview/${result.job_id}?type=overlay`} 
+                                    download={`${result.job_id}_overlay.tif`}
+                                    target="_blank"
+                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-95"
+                                >
+                                    <Download size={14} /> Descargar
+                                </a>
+                            </div>
+
+                            {/* Fila: Máscara Binaria */}
+                            <div className="flex items-center justify-between py-4 group">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gray-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                        <FileText className="size-6 text-gray-400 group-hover:text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 leading-tight">Máscara Binaria (GeoTIFF)</p>
+                                        <p className="text-sm text-gray-500">Recorte exacto del modelo (0-1)</p>
+                                    </div>
+                                </div>
+                                <a 
+                                    href={`/api/ai/preview/${result.job_id}?type=mask`} 
+                                    download={`${result.job_id}_mask.tif`}
+                                    target="_blank"
+                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-95"
+                                >
+                                    <Download size={14} /> Descargar
+                                </a>
+                            </div>
+
+                            {/* Fila: Visualización Detallada */}
+                            <div className="flex items-center justify-between py-4 group">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gray-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                        <ImageIcon className="size-6 text-gray-400 group-hover:text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 leading-tight">Visualización Detallada (PNG)</p>
+                                        <p className="text-sm text-gray-500">Gráfico de resumen comparativo</p>
+                                    </div>
+                                </div>
+                                <a 
+                                    href={`/api/ai/preview/${result.job_id}?type=visualization`} 
+                                    download={`${result.job_id}_visualization.png`}
+                                    target="_blank"
+                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-95"
+                                >
+                                    <Download size={14} /> Descargar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Threshold</label>
-                    <input type="number" step="0.05" min="0" max="1" value={threshold} onChange={(e) => setThreshold(parseFloat(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Stride</label>
-                    <input type="number" step="32" min="32" max="512" value={stride} onChange={(e) => setStride(parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+
+                  <div className="space-y-6">
+                    <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                      <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <Activity className="size-5" /> Estadísticas
+                      </h3>
+                      
+                      {result.stress_severity ? (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-blue-700 text-sm">Severidad de Estrés:</p>
+                            <p className="text-2xl font-black text-blue-900">{result.stress_severity}</p>
+                          </div>
+                          <div>
+                            <p className="text-blue-700 text-sm">Cultivo Afectado:</p>
+                            <p className="text-3xl font-black text-blue-900">{result.anomaly_percentage_in_crop?.toFixed(2)}%</p>
+                            <div className="w-full bg-blue-200 rounded-full h-3 mt-1">
+                              <div className="bg-blue-600 h-3 rounded-full" style={{ width: `${result.anomaly_percentage_in_crop}%` }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : result.stats ? (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-blue-700 text-sm">Porcentaje de Anomalía:</p>
+                            <p className="text-4xl font-black text-blue-900">{result.stats.anomaly_percentage.toFixed(2)}%</p>
+                            <div className="w-full bg-blue-200 rounded-full h-3 mt-1">
+                              <div className="bg-blue-600 h-3 rounded-full" style={{ width: `${result.stats.anomaly_percentage}%` }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-blue-600">Procesando datos estadísticos...</p>
+                      )}
+                    </div>
+
+                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Información Técnica</h3>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Modelo:</span>
+                          <span className="font-mono font-medium">{result.job_id!.split('_')[0]}...</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Estado:</span>
+                          <span className="text-green-600 font-bold uppercase">{result.status}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Workspace ID:</span>
+                          <span className="font-mono text-xs">{selectedWorkspace}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 flex flex-col">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><Play className="mr-2" size={20} /> Status & Results</h2>
-              <div className="flex-1 flex flex-col justify-center">
-                {result && (
-                  <div className="bg-green-50 text-green-700 p-4 rounded-md mb-4">
-                    <div className="flex items-center mb-2"><CheckCircle className="mr-2" size={20} /><span className="font-bold">Prediction Completed!</span></div>
-                    <p>Output: {result.output_path}</p>
-                    <p>Anomaly Percentage: {result.stats?.anomaly_percentage.toFixed(2)}%</p>
-                  </div>
-                )}
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm text-gray-600 mb-1"><span>{statusMessage}</span><span>{progress}%</span></div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className={`h-2 rounded-full transition-all duration-300 ${result ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
-                  </div>
-                </div>
-                <button onClick={startPrediction} disabled={!selectedFile || !selectedModel || isProcessing} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-medium disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">
-                  {isProcessing ? 'Processing...' : 'Start Prediction'}
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
 

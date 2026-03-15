@@ -121,7 +121,13 @@ export const SatelliteTab: React.FC<SatelliteTabProps> = ({
                                                 id={`band-${image.id}`}
                                                 defaultValue=""
                                             >
-                                                <option value="" disabled>Seleccionar banda espectral</option>
+                                                <option value="" disabled>Seleccionar opción de descarga</option>
+                                                <option value="ALL_BANDS" className="font-semibold text-blue-700">📦 Todas las bandas (Multiespectral)</option>
+                                                <optgroup label="Combinaciones Visuales">
+                                                    <option value="B4,B3,B2">🖼️ RGB Color Natural (B4,B3,B2)</option>
+                                                    <option value="B8,B4,B3">🌿 Falso Color Veg. (B8,B4,B3)</option>
+                                                </optgroup>
+                                                <optgroup label="Bandas Individuales (Datos Crudos)">
                                                 {image.bands.map((band) => (
                                                     <option key={band} value={band}>
                                                         {band} {
@@ -134,6 +140,7 @@ export const SatelliteTab: React.FC<SatelliteTabProps> = ({
                                                         }
                                                     </option>
                                                 ))}
+                                                </optgroup>
                                             </select>
                                             <button
                                                 onClick={() => {

@@ -119,10 +119,20 @@ class SatelliteImageController extends Controller
         'visualization_params' => 'nullable|array'
       ]);
 
+      $imageId = $request->input('image_id');
+      $defaultScale = 30.0;
+      
+      // Ajustar escala por defecto según el satélite
+      if (str_contains($imageId, 'COPERNICUS/S2')) {
+          $defaultScale = 10.0;
+      } elseif (str_contains($imageId, 'LANDSAT')) {
+          $defaultScale = 15.0; // Reducido de 30m a 15m para mayor suavidad (interpolación)
+      }
+
       $payload = [
-        'image_id' => $request->input('image_id'),
+        'image_id' => $imageId,
         'bands' => $request->input('bands', ['B4', 'B3', 'B2']),
-        'scale' => $request->input('scale', 30.0),
+        'scale' => $request->input('scale', $defaultScale),
         'region' => $request->input('region'),
         'max_file_size_mb' => $request->input('max_file_size_mb', 45.0),
         'enhance_visualization' => $request->input('enhance_visualization', true),

@@ -103,9 +103,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
   Route::get('/api/ai/models', [App\Http\Controllers\AIModelController::class, 'models']);
   Route::post('/api/ai/predict', [App\Http\Controllers\AIModelController::class, 'predict']);
   Route::get('/api/ai/status/{jobId}', [App\Http\Controllers\AIModelController::class, 'status']);
+  Route::get('/api/ai/preview/{jobId}', [App\Http\Controllers\AIModelController::class, 'preview']);
   Route::post('/api/ai/train', [App\Http\Controllers\AIModelController::class, 'train']);
   Route::post('/api/ai/upload', [App\Http\Controllers\AIModelController::class, 'uploadModel']);
   Route::get('/api/ai/training/status/{jobId}', [App\Http\Controllers\AIModelController::class, 'trainingStatus']);
+  Route::get('/api/ai/inferences', [App\Http\Controllers\AIModelController::class, 'listInferences']);
+  Route::delete('/api/ai/inference/{jobId}', [App\Http\Controllers\AIModelController::class, 'deleteInference']);
 });
 
 // Incluir rutas de API para workspaces

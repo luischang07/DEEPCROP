@@ -69,6 +69,8 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     const [inferencesLoading, setInferencesLoading] = useState(false);
     const [filesMeta, setFilesMeta] = useState<{ current_page: number; per_page: number; total: number; last_page: number } | null>(null);
     const [filesPage, setFilesPage] = useState(1);
+    const [inferencesPage, setInferencesPage] = useState(1);
+    const [inferencesMeta, setInferencesMeta] = useState<{ current_page: number; per_page: number; total: number; last_page: number } | null>(null);
     const [showImageUploadModal, setShowImageUploadModal] = useState(false);
     const [showImageViewModal, setShowImageViewModal] = useState(false);
     const [showImageEditModal, setShowImageEditModal] = useState(false);
@@ -105,7 +107,7 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         }
 
         if (activeTab === 'inferences' && inferences.length === 0 && !inferencesLoading) {
-            loadInferences();
+            loadInferences(1);
         }
     }, [activeTab]);
 
@@ -162,11 +164,14 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         }
     };
 
-    const loadInferences = async () => {
+    const loadInferences = async (page = 1, perPage = 10) => {
         try {
             setInferencesLoading(true);
-            const data = await aiApi.getInferences(workspaceId);
-            setInferences(data);
+            const data = await aiApi.getInferences(workspaceId, page, perPage);
+            
+            setInferences(data.data);
+            setInferencesMeta(data.meta || null);
+            setInferencesPage(page);
         } catch (err) {
             console.error('Error loading inferences:', err);
         } finally {
@@ -576,7 +581,9 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                         inferences={inferences}
                         loading={inferencesLoading}
                         onDelete={handleInferenceDelete}
-                        onRefresh={loadInferences}
+                        onRefresh={() => loadInferences(1)}
+                        meta={inferencesMeta}
+                        onPageChange={loadInferences}
                     />
                 </div>
             )}

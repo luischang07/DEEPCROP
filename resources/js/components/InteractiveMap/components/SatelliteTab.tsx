@@ -11,6 +11,7 @@ interface SatelliteImage {
     spacecraft: string;
     orbit: number;
     item_type?: string;
+    bundle?: string;
 }
 
 interface SatelliteTabProps {
@@ -102,8 +103,23 @@ export const SatelliteTab: React.FC<SatelliteTabProps> = ({
                                         <p className="text-xs text-gray-600">
                                             Las imágenes de Planet requieren ser procesadas (recorte y corrección) ante de descargar.
                                         </p>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-gray-700">Seleccionar Bundle:</label>
+                                            <select 
+                                                id={`bundle-${image.id}`}
+                                                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                defaultValue="analytic_8b_sr_udm2"
+                                            >
+                                                <option value="analytic_8b_sr_udm2">💎 8-Bandas (SuperDove - 8-band Analytic)</option>
+                                                <option value="analytic_sr_udm2">📦 4-Bandas (PlanetScope - Analytic SR)</option>
+                                            </select>
+                                        </div>
                                         <button
-                                            onClick={() => onOrderImage && onOrderImage(image)}
+                                            onClick={() => {
+                                                const select = document.getElementById(`bundle-${image.id}`) as HTMLSelectElement;
+                                                const bundle = select.value;
+                                                onOrderImage && onOrderImage({ ...image, bundle });
+                                            }}
                                             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                                         >
                                             <span>🚀</span> Solicitar Pedido (Clip AOI)

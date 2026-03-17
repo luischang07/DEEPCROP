@@ -220,6 +220,7 @@ class SatelliteImageController extends Controller
       $payload = [
         'name' => $request->input('name'),
         'item_ids' => $request->input('item_ids'),
+        'bundle' => $request->input('bundle', 'analytic_8b_sr_udm2'),
         'api_key' => env('PLANET_API_KEY')
       ];
 

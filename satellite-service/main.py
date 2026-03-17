@@ -78,7 +78,7 @@ class OrderPlanetRequest(BaseModel):
     name: str
     item_ids: List[str]
     item_type: str = "PSScene"
-    bundle: str = "analytic_sr_udm2"
+    bundle: str = "analytic_8b_sr_udm2"
     geometry: Optional[Union[Dict[str, Any], List[Any]]] = None
     api_key: str
 
@@ -426,7 +426,7 @@ async def search_planet_images(request: SearchPlanetRequest):
                 "full_id": feature.get('id'),
                 "date": props.get('acquired', '').split('T')[0],
                 "cloud_coverage": round(props.get('cloud_cover', 0) * 100, 2),
-                "bands": ["RGB", "NIR", "UDM2"], # Resumen de bandas comunes en PSScene
+                "bands": ["Blue", "Green", "Red", "NIR", "RedEdge", "Coastal Blue", "Yellow", "Green-I", "UDM2"], 
                 "product_id": feature.get('id'),
                 "spacecraft": props.get('satellite_id', 'PlanetScope'),
                 "orbit": 0, # Planet no expone esto directamente igual que Sentinel

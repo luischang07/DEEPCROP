@@ -52,7 +52,15 @@ interface TrainingStatus {
   error_message?: string;
 }
 
-export default function AIModel({ workspaces = [] }: { workspaces: { id: string, name: string }[] }) {
+export default function AIModel({ 
+  workspaces = [], 
+  initialJobId = null, 
+  initialWorkspaceId = null 
+}: { 
+  workspaces: { id: string, name: string }[],
+  initialJobId?: string | null,
+  initialWorkspaceId?: string | null
+}) {
   const [activeTab, setActiveTab] = useState<'inference' | 'training' | 'upload'>('inference');
 
   // Common State
@@ -65,8 +73,10 @@ export default function AIModel({ workspaces = [] }: { workspaces: { id: string,
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [threshold, setThreshold] = useState(0.5);
   const [stride, setStride] = useState(256);
-  const [useWaterStress, setUseWaterStress] = useState(false);
-  const [selectedWorkspace, setSelectedWorkspace] = useState(workspaces.length > 0 ? workspaces[0].id : '');
+  const [useWaterStress, setUseWaterStress] = useState(true);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(
+    initialWorkspaceId || (workspaces.length > 0 ? workspaces[0].id : '')
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Ready');
@@ -104,14 +114,43 @@ export default function AIModel({ workspaces = [] }: { workspaces: { id: string,
     }
   }, [selectedWorkspace]);
 
+  useEffect(() => {
+    if (initialJobId) {
+      fetchJobDetails(initialJobId);
+    }
+  }, [initialJobId]);
+
+  const fetchJobDetails = async (jobId: string) => {
+    try {
+      setStatusMessage(`Loading job ${jobId}...`);
+      const response = await fetch(`/api/ai/status/${jobId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setResult(data);
+        if (data.job_metadata?.visualization_path || data.stress_severity) {
+          setPreviewType('visualization');
+        } else {
+          setPreviewType('preview');
+        }
+        setStatusMessage('Job loaded');
+      }
+    } catch (err) {
+      console.error('Error fetching job details:', err);
+    }
+  };
+
   const loadLatestInferences = async (workspaceId: string) => {
     try {
       const response = await fetch(`/api/ai/inferences?workspace_id=${workspaceId}`);
-      const data = await response.json();
-      setLatestInferences(data || []);
-      if (data && data.length > 0 && !isProcessing) {
-        setResult(data[0]);
-        if (data[0].job_metadata?.visualization_path || data[0].stress_severity) {
+      const resultData = await response.json();
+      
+      // La API ahora devuelve { data: [], meta: {} }
+      const inferences = resultData.data || resultData || [];
+      
+      setLatestInferences(inferences);
+      if (inferences && inferences.length > 0 && !isProcessing) {
+        setResult(inferences[0]);
+        if (inferences[0].job_metadata?.visualization_path || inferences[0].stress_severity) {
           setPreviewType('visualization');
         } else {
           setPreviewType('preview');
@@ -400,18 +439,6 @@ export default function AIModel({ workspaces = [] }: { workspaces: { id: string,
                       <label className="block text-sm font-medium text-gray-700 mb-2">Stride</label>
                       <input type="number" step="32" min="32" max="512" value={stride} onChange={(e) => setStride(parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-4">
-                    <input
-                      type="checkbox"
-                      id="waterStress"
-                      checked={useWaterStress}
-                      onChange={(e) => setUseWaterStress(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor="waterStress" className="text-sm font-medium text-gray-700">
-                      Detección de Estrés Hídrico (6 canales - PlanetScope)
-                    </label>
                   </div>
 
                   {workspaces.length > 0 && (

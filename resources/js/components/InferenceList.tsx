@@ -10,7 +10,9 @@ import {
     Activity,
     ExternalLink,
     Search,
-    Eye
+    Eye,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
@@ -23,6 +25,13 @@ interface InferenceListProps {
     loading: boolean;
     onDelete: (jobId: string) => void;
     onRefresh: () => void;
+    meta?: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    } | null;
+    onPageChange?: (page: number) => void;
 }
 
 export const InferenceList: React.FC<InferenceListProps> = ({
@@ -30,7 +39,9 @@ export const InferenceList: React.FC<InferenceListProps> = ({
     inferences,
     loading,
     onDelete,
-    onRefresh
+    onRefresh,
+    meta = null,
+    onPageChange
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -175,6 +186,60 @@ export const InferenceList: React.FC<InferenceListProps> = ({
                     </Card>
                 ))}
             </div>
+
+            {/* Pagination Controls */}
+            {meta && meta.last_page > 1 && (
+                <div className="mt-8 flex items-center justify-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onPageChange?.(meta.current_page - 1)}
+                        disabled={meta.current_page === 1}
+                        className="flex items-center gap-1"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                        Anterior
+                    </Button>
+
+                    <div className="flex items-center gap-1">
+                        {Array.from({ length: meta.last_page }, (_, i) => i + 1).map((page) => {
+                            // Mostrar solo algunas páginas si hay muchas
+                            if (
+                                meta.last_page > 7 &&
+                                page !== 1 &&
+                                page !== meta.last_page &&
+                                Math.abs(page - meta.current_page) > 1
+                            ) {
+                                if (page === 2 || page === meta.last_page - 1) return <span key={page} className="px-2">...</span>;
+                                return null;
+                            }
+
+                            return (
+                                <Button
+                                    key={page}
+                                    variant={meta.current_page === page ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => onPageChange?.(page)}
+                                    className={`w-9 h-9 p-0 ${meta.current_page === page ? 'bg-indigo-600' : ''}`}
+                                >
+                                    {page}
+                                </Button>
+                            );
+                        })}
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onPageChange?.(meta.current_page + 1)}
+                        disabled={meta.current_page === meta.last_page}
+                        className="flex items-center gap-1"
+                    >
+                        Siguiente
+                        <ChevronRight className="w-4 h-4" />
+                    </Button>
+                </div>
+            )}
         </div>
     );
 };

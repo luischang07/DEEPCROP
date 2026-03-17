@@ -15,7 +15,7 @@ class AIModelController extends Controller
     $this->apiUrl = config('services.ai.service_url', 'http://localhost:8002') . '/api/v1';
   }
 
-  public function index()
+  public function index(Request $request)
   {
     $user = auth()->user();
 
@@ -38,7 +38,9 @@ class AIModelController extends Controller
       });
 
     return Inertia::render('ai-model', [
-      'workspaces' => $workspaces
+      'workspaces' => $workspaces,
+      'initialJobId' => $request->query('job_id'),
+      'initialWorkspaceId' => $request->query('workspace_id'),
     ]);
   }
 
@@ -76,7 +78,7 @@ class AIModelController extends Controller
             'threshold' => $request->threshold,
             'stride' => $request->stride,
             'batch_size' => 1, // Default
-            'use_water_stress' => $request->boolean('use_water_stress', false),
+            'use_water_stress' => true,
             'workspace_id' => $request->workspace_id,
           ]);
 
@@ -187,11 +189,29 @@ class AIModelController extends Controller
   {
     try {
       $workspaceId = request()->query('workspace_id');
+      $limit = request()->query('per_page', 10);
+      $page = request()->query('page', 1);
+      $offset = ($page - 1) * $limit;
+      
       $response = Http::get("{$this->apiUrl}/inference/jobs", [
         'workspace_id' => $workspaceId,
-        'limit' => 5
+        'limit' => $limit,
+        'offset' => $offset
       ]);
-      return $response->json();
+      
+      $data = $response->json();
+      $total = $data['total'] ?? 0;
+      $jobs = $data['jobs'] ?? [];
+      
+      return response()->json([
+        'data' => $jobs,
+        'meta' => [
+          'current_page' => (int) $page,
+          'per_page' => (int) $limit,
+          'total' => $total,
+          'last_page' => ceil($total / $limit)
+        ]
+      ]);
     } catch (\Exception $e) {
       return response()->json(['error' => 'Could not connect to AI API'], 500);
     }

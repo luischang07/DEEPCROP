@@ -438,6 +438,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ onAreaSelected, classNa
                 body: JSON.stringify({
                     name: orderName,
                     item_ids: [image.id],
+                    bundle: image.bundle || 'analytic_8b_sr_udm2',
                     coordinates: planetCoords
                 })
             });

@@ -32,7 +32,7 @@ Realiza un pedido de imágenes específicas. Permite aplicar un "clip" (recorte)
   "name": "Mi Pedido de Enero",
   "item_ids": ["20250110_1530..."],
   "item_type": "PSScene",
-  "bundle": "analytic_sr_udm2",
+  "bundle": "analytic_8b_sr_udm2",
   "geometry": { ... },
   "api_key": "tu_api_key"
 }

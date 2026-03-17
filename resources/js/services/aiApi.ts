@@ -17,9 +17,13 @@ export interface InferenceJob {
 }
 
 export const aiApi = {
-    getInferences: async (workspaceId: string): Promise<InferenceJob[]> => {
+    getInferences: async (workspaceId: string, page: number = 1, perPage: number = 10): Promise<{ data: InferenceJob[], meta: any }> => {
         const response = await axios.get(`${API_BASE}/inferences`, {
-            params: { workspace_id: workspaceId }
+            params: { 
+                workspace_id: workspaceId,
+                page: page,
+                per_page: perPage
+            }
         });
         return response.data;
     },

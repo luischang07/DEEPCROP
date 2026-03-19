@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AIModelController extends Controller
@@ -129,23 +130,137 @@ class AIModelController extends Controller
   public function train(Request $request)
   {
     $request->validate([
-      'images_folder' => 'required|string',
-      'masks_folder' => 'required|string',
-      'epochs' => 'required|integer',
-      'batch_size' => 'required|integer',
+      'images_folder'   => 'required|string',
+      'masks_folder'    => 'sometimes|nullable|string',
+      'epochs'          => 'required|integer|min:1|max:500',
+      'batch_size'      => 'required|integer|min:1|max:64',
+      'patch_size'      => 'sometimes|integer|min:64|max:1024',
+      'stride'          => 'sometimes|integer|min:32|max:512',
+      'backbone'        => 'sometimes|string',
+      'encoder_weights' => 'sometimes|nullable|string',
     ]);
 
     try {
       $response = Http::post("{$this->apiUrl}/training/start", [
-        'images_folder' => $request->images_folder,
-        'masks_folder' => $request->masks_folder,
-        'patch_size' => $request->patch_size ?? 256,
-        'stride' => $request->stride ?? 128,
-        'batch_size' => $request->batch_size,
-        'epochs' => $request->epochs,
-        'backbone' => $request->backbone ?? 'resnet34',
+        'images_folder'   => $request->images_folder,
+        'masks_folder'    => $request->masks_folder ?? '',
+        'patch_size'      => $request->patch_size ?? 128,
+        'stride'          => $request->stride ?? 64,
+        'batch_size'      => $request->batch_size,
+        'epochs'          => $request->epochs,
+        'backbone'        => $request->backbone ?? 'resnet34',
+        'encoder_weights' => $request->encoder_weights ?: null,
       ]);
 
+      return $response->json();
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  public function cancelTraining($jobId)
+  {
+    try {
+      $response = Http::delete("{$this->apiUrl}/training/cancel/{$jobId}");
+      return $response->json();
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  public function uploadTrainingDataset(Request $request)
+  {
+    Log::info('AIModelController@uploadTrainingDataset reached');
+    $request->validate([
+      'files'        => 'required',
+      'dataset_type' => 'sometimes|string|in:images,masks',
+      'session_id'   => 'sometimes|nullable|string',
+    ]);
+
+    try {
+      $datasetType = $request->input('dataset_type', 'images');
+      $sessionId   = $request->input('session_id', '');
+
+      Log::info("Uploading {$datasetType} for session {$sessionId}");
+
+      // Build multipart request: attach each file AND the form fields
+      $http = Http::timeout(300)->withHeaders(['Accept' => 'application/json']);
+
+      foreach ($request->file('files', []) as $file) {
+        $http = $http->attach(
+          'files',
+          file_get_contents($file->path()),
+          $file->getClientOriginalName(),
+          ['Content-Type' => $file->getMimeType() ?: 'image/tiff']
+        );
+      }
+
+      // Attach text form fields as multipart parts
+      $http = $http->attach('dataset_type', $datasetType, null, []);
+      if ($sessionId) {
+        $http = $http->attach('session_id', $sessionId, null, []);
+      }
+
+      $response = $http->post("{$this->apiUrl}/training/upload-dataset-files");
+
+      Log::info("Python API Response Status: " . $response->status());
+      if (!$response->successful()) {
+          Log::error("Python API Error: " . $response->body());
+      }
+
+      // Relay the upstream status so the frontend can detect errors correctly
+      $status = $response->successful() ? 200 : $response->status();
+      return response()->json($response->json(), $status);
+
+    } catch (\Exception $e) {
+      Log::error("Exception in uploadTrainingDataset: " . $e->getMessage());
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  public function unsupervisedTrain(Request $request)
+  {
+    $request->validate([
+      'model_name'       => 'required|string',
+      'images_folder'    => 'required|string',
+      'epochs'           => 'sometimes|integer|min:1|max:200',
+      'batch_size'       => 'sometimes|integer|min:1|max:64',
+      'patch_size'       => 'sometimes|integer|min:32|max:512',
+      'stride'           => 'sometimes|integer|min:16|max:512',
+      'use_water_indices'=> 'sometimes|boolean',
+    ]);
+
+    try {
+      $response = Http::post("{$this->apiUrl}/unsupervised/train", [
+        'model_name'        => $request->model_name,
+        'images_folder'     => $request->images_folder,
+        'epochs'            => $request->input('epochs', 50),
+        'batch_size'        => $request->input('batch_size', 16),
+        'patch_size'        => $request->input('patch_size', 128),
+        'stride'            => $request->input('stride', 64),
+        'use_water_indices' => $request->boolean('use_water_indices', false),
+      ]);
+
+      return $response->json();
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  public function unsupervisedTrainingStatus($jobId)
+  {
+    try {
+      $response = Http::get("{$this->apiUrl}/unsupervised/status/{$jobId}");
+      return $response->json();
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  public function cancelUnsupervisedTraining($jobId)
+  {
+    try {
+      $response = Http::delete("{$this->apiUrl}/unsupervised/cancel/{$jobId}");
       return $response->json();
     } catch (\Exception $e) {
       return response()->json(['error' => $e->getMessage()], 500);

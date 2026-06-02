@@ -286,7 +286,7 @@ const extractTIFFMetadata = (view: DataView, decoder: TextDecoder): { lat: numbe
                 console.log('Found DEEPCROP_TIFF_META pattern at index:', deepcropIndex);
                 
                 // Extraer todo después del marcador hasta encontrar el final del JSON
-                let jsonStart = deepcropIndex + 'DEEPCROP_TIFF_META:'.length;
+                const jsonStart = deepcropIndex + 'DEEPCROP_TIFF_META:'.length;
                 let jsonStr = fullData.substring(jsonStart);
                 
                 console.log('Raw JSON string start:', jsonStr.substring(0, 100));

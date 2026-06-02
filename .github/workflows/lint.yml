@@ -29,7 +29,9 @@ jobs:
         run: |
           composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
           npm install
-          chmod -R 755 node_modules
+
+      - name: Fix Node Permissions
+        run: chmod -R 755 node_modules
 
       - name: Run Pint
         run: vendor/bin/pint

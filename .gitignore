@@ -22,3 +22,8 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Google Earth Engine credentials
+gee_service_account.json
+calcium-ember-455119-f6-*.json
+log_tail.txt

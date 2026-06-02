@@ -38,6 +38,14 @@ return [
             'report' => false,
         ],
 
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
@@ -60,6 +68,19 @@ return [
             'report' => false,
         ],
 
+        'minio' => [
+            'driver' => 's3',
+            'key' => env('MINIO_ACCESS_KEY', 'deepcrop_minio_user'),
+            'secret' => env('MINIO_SECRET_KEY', 'deepcrop_minio_password123'),
+            'region' => env('MINIO_REGION', 'us-east-1'),
+            'bucket' => env('MINIO_BUCKET', 'deepcrop-images'),
+            'url' => env('MINIO_URL'),
+            'endpoint' => env('MINIO_ENDPOINT', 'http://localhost:9000'),
+            'use_path_style_endpoint' => env('MINIO_USE_PATH_STYLE_ENDPOINT', true),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*
@@ -76,5 +97,17 @@ return [
     'links' => [
         public_path('storage') => storage_path('app/public'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Limits
+    |--------------------------------------------------------------------------
+    |
+    | Maximum file size for image uploads (in bytes)
+    | Default: 100MB (100 * 1024 * 1024)
+    |
+    */
+
+    'max_image_size' => env('MAX_IMAGE_SIZE', 100 * 1024 * 1024), // 100MB
 
 ];

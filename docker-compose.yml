@@ -1,0 +1,114 @@
+services:
+  # MongoDB Database
+  mongo:
+    image: mongo:8.0
+    container_name: deepcrop-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: deepcrop_user
+      MONGO_INITDB_ROOT_PASSWORD: deepcrop_password
+      MONGO_INITDB_DATABASE: DeepCroop
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/development/mongo/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - deepcrop-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: deepcrop-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - deepcrop-network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: deepcrop-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: deepcrop_minio_user
+      MINIO_ROOT_PASSWORD: deepcrop_minio_password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - deepcrop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  satellite-service:
+    build:
+      context: ./satellite-service
+      dockerfile: Dockerfile
+    container_name: deepcrop-satellite-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./satellite-service:/app
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gee_service_account.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - deepcrop-network
+
+  image-processor:
+    build:
+      context: ./SatelliteImageProcessor
+      dockerfile: Dockerfile
+    container_name: deepcrop-image-processor
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./SatelliteImageProcessor:/app
+      - image_processor_uploads:/app/uploads
+      - image_processor_outputs:/app/outputs
+    environment:
+      - FLASK_APP=run.py
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      - SECRET_KEY=your-secret-key-change-in-production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - deepcrop-network
+
+networks:
+  deepcrop-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  image_processor_uploads:
+    driver: local
+  image_processor_outputs:
+    driver: local

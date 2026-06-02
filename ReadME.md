@@ -9,6 +9,7 @@ A Laravel-based backend with a React frontend using TypeScript.
 - Node.js >= 16.x
 - npm or yarn
 - MongoDB
+- MinIO (Object Storage)
 
 ## Contributing
 
@@ -38,7 +39,7 @@ A Laravel-based backend with a React frontend using TypeScript.
     php artisan key:generate
     ```
 
-4. Configure database in the `.env` file.
+4. Configure database and MinIO (using `.env.minio`) in the `.env` file.
 
 5. Run database migrations:
 

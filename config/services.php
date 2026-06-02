@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'satellite' => [
+        'service_url' => env('SATELLITE_SERVICE_URL', 'http://localhost:8001'),
+    ],
+    'ai' => [
+        'service_url' => env('AI_MODEL_SERVICE_URL', 'http://localhost:8002'),
+    ],
+
 ];

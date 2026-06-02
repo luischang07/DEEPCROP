@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  satellite-service:
+    build: 
+      context: ./satellite-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./credentials:/app/credentials:ro
+      - ./satellite-service:/app
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gee_service_account.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - satellite-network
+
+networks:
+  satellite-network:
+    driver: bridge

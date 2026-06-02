@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { InferenceJob, aiApi } from '../services/aiApi';
+import { InferenceJob } from '../services/aiApi';
 import { 
     FileText, 
     Trash2, 
@@ -8,7 +8,6 @@ import {
     Clock, 
     AlertCircle,
     Activity,
-    ExternalLink,
     Search,
     Eye,
     ChevronLeft,
@@ -39,7 +38,6 @@ export const InferenceList: React.FC<InferenceListProps> = ({
     inferences,
     loading,
     onDelete,
-    onRefresh,
     meta = null,
     onPageChange
 }) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Folder, FolderOpen, Settings, Trash2 } from 'lucide-react';
+import { Plus, Users, Folder, FolderOpen } from 'lucide-react';
 import { Workspace } from '../types/workspace';
 import { workspaceApi } from '../services/workspaceApi';
 import { CreateWorkspaceModal } from './WorkspaceCreateModal';

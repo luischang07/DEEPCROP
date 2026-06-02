@@ -12,9 +12,7 @@ import {
     Paper,
     Grid,
     Alert,
-    IconButton,
-    FormHelperText,
-    InputAdornment
+    IconButton
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -114,8 +112,9 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
             const updatedImage = await imageApi.updateImage(workspaceId, image.id, updateData);
             onSuccess(updatedImage);
             onClose();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Error al actualizar la imagen');
+        } catch (err) {
+            const errorResponse = err as { response?: { data?: { message?: string } } };
+            setError(errorResponse.response?.data?.message || 'Error al actualizar la imagen');
         } finally {
             setIsLoading(false);
         }
@@ -162,7 +161,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
                             Información del Archivo
                         </Typography>
                         <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     Nombre original:
                                 </Typography>
@@ -170,7 +169,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
                                     {image.original_name}
                                 </Typography>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     Tamaño:
                                 </Typography>
@@ -178,7 +177,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
                                     {image.formatted_size}
                                 </Typography>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     Tipo:
                                 </Typography>
@@ -186,7 +185,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
                                     {image.mime_type}
                                 </Typography>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     Subida por:
                                 </Typography>
@@ -215,7 +214,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
                             Coordenadas del Centro (Opcional)
                         </Typography>
                         <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <TextField
                                     fullWidth
                                     label="Latitud"
@@ -228,7 +227,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({
                                     helperText="Rango: -90 a 90"
                                 />
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <TextField
                                     fullWidth
                                     label="Longitud"

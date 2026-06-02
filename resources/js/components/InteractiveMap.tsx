@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-useless-catch */
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import JSZip from 'jszip';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Head } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
     ArrowLeft, 
     Camera, 
-    BarChart3, 
-    Download, 
-    Search,
-    Filter,
     RefreshCw,
     Images as ImagesIcon
 } from 'lucide-react';
@@ -49,11 +45,7 @@ export default function WorkspaceImagesPage({ workspaceId }: WorkspaceImagesPage
     const [selectedImageForRename, setSelectedImageForRename] = useState<WorkspaceImage | null>(null);
     const [selectedImageForDelete, setSelectedImageForDelete] = useState<WorkspaceImage | null>(null);
 
-    useEffect(() => {
-        loadWorkspaceData();
-    }, [workspaceId]);
-
-    const loadWorkspaceData = async () => {
+    const loadWorkspaceData = useCallback(async () => {
         try {
             setLoading(true);
             const [workspaceData, imagesData, statsData] = await Promise.all([
@@ -66,13 +58,18 @@ export default function WorkspaceImagesPage({ workspaceId }: WorkspaceImagesPage
             setImages(imagesData.images);
             setStats(statsData);
             setError(null);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Error al cargar los datos');
+        } catch (err) {
+            const error = err as { response?: { data?: { message?: string } } };
+            setError(error.response?.data?.message || 'Error al cargar los datos');
             console.error('Error loading workspace data:', err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [workspaceId]);
+
+    useEffect(() => {
+        loadWorkspaceData();
+    }, [loadWorkspaceData]);
 
     const loadImages = async () => {
         try {

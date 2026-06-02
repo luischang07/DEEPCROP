@@ -42,9 +42,10 @@ export const MembersModal: React.FC<MembersModalProps> = ({
             setShowInviteForm(false);
             onUpdate();
             alert('Usuario invitado exitosamente');
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error inviting user:', err);
-            const message = err.response?.data?.message || 'Error al invitar usuario';
+            const error = err as { response?: { data?: { message?: string } } };
+            const message = error.response?.data?.message || 'Error al invitar usuario';
             alert(message);
         } finally {
             setLoading(false);

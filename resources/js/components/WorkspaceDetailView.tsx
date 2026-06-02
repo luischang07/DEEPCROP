@@ -1,22 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
     ArrowLeft, 
-    Upload, 
     Users, 
-    Settings, 
-    Download,
     FileText,
-    Map,
-    Trash2,
-    Edit3,
-    Eye,
-    Crown,
-    UserPlus,
-    MoreVertical,
     Image as ImageIcon,
     Camera,
-    ExternalLink,
     Activity
 } from 'lucide-react';
 import { WorkspaceDetail, WorkspaceFile, WorkspaceImage } from '../types/workspace';
@@ -53,7 +41,6 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     // Estados para archivos
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showMembersModal, setShowMembersModal] = useState(false);
-    const [selectedFiles, setSelectedFiles] = useState<number[]>([]);
     const [showAreaPreview, setShowAreaPreview] = useState(false);
     const [selectedFileForPreview, setSelectedFileForPreview] = useState<WorkspaceFile | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -68,8 +55,6 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     const [inferences, setInferences] = useState<InferenceJob[]>([]);
     const [inferencesLoading, setInferencesLoading] = useState(false);
     const [filesMeta, setFilesMeta] = useState<{ current_page: number; per_page: number; total: number; last_page: number } | null>(null);
-    const [filesPage, setFilesPage] = useState(1);
-    const [inferencesPage, setInferencesPage] = useState(1);
     const [inferencesMeta, setInferencesMeta] = useState<{ current_page: number; per_page: number; total: number; last_page: number } | null>(null);
     const [showImageUploadModal, setShowImageUploadModal] = useState(false);
     const [showImageViewModal, setShowImageViewModal] = useState(false);
@@ -81,37 +66,7 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     const [selectedImageForRename, setSelectedImageForRename] = useState<WorkspaceImage | null>(null);
     const [selectedImageForDelete, setSelectedImageForDelete] = useState<WorkspaceImage | null>(null);
 
-    useEffect(() => {
-        loadWorkspace();
-        loadImages(); // Cargar imágenes siempre al cargar el workspace
-    }, [workspaceId]);
-
-    // Cargar archivos cuando se entra a la pestaña 'files' y aún no han sido cargados
-    useEffect(() => {
-        if (activeTab !== 'files') return;
-        // Si ya tenemos archivos cargados o estamos en medio de una carga, no hacer nada
-        if (filesLoading) return;
-        if (filesMeta !== null) return; // Previene loops si el workspace tiene 0 archivos
-        if (workspace && workspace.files && workspace.files.length > 0) return;
-
-        // Cargar primera página de archivos
-        loadFiles();
-        // Dependencias estrictas para evitar re-renderizados infinitos con espacios vacíos
-    }, [activeTab, filesLoading, filesMeta, workspace?.files?.length]);
-
-    useEffect(() => {
-        // Recargar imágenes solo cuando se cambia específicamente a la pestaña de imágenes
-        // y no hemos cargado imágenes recientemente
-        if (activeTab === 'images' && images.length === 0 && !imagesLoading) {
-            loadImages();
-        }
-
-        if (activeTab === 'inferences' && inferences.length === 0 && !inferencesLoading) {
-            loadInferences(1);
-        }
-    }, [activeTab]);
-
-    const loadWorkspace = async () => {
+    const loadWorkspace = useCallback(async () => {
         try {
             setLoading(true);
             const data = await workspaceApi.getWorkspace(workspaceId);
@@ -123,9 +78,9 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         } finally {
             setLoading(false);
         }
-    };
+    }, [workspaceId]);
 
-    const loadImages = async () => {
+    const loadImages = useCallback(async () => {
         try {
             setImagesLoading(true);
             const data = await imageApi.getImages(workspaceId, { per_page: 50 });
@@ -135,9 +90,9 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         } finally {
             setImagesLoading(false);
         }
-    };
+    }, [workspaceId]);
 
-    const loadFiles = async (page = 1, perPage = 20) => {
+    const loadFiles = useCallback(async (page = 1, perPage = 20) => {
         try {
             setFilesLoading(true);
             const data = await workspaceApi.getFiles(workspaceId, { 
@@ -155,29 +110,57 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
                 const newFiles = page === 1 ? data.files : [...existing, ...data.files];
                 return { ...prev, files: newFiles };
             });
-
-            setFilesPage(page);
         } catch (err) {
             console.error('Error loading files:', err);
         } finally {
             setFilesLoading(false);
         }
-    };
+    }, [workspaceId]);
 
-    const loadInferences = async (page = 1, perPage = 10) => {
+    const loadInferences = useCallback(async (page = 1, perPage = 10) => {
         try {
             setInferencesLoading(true);
             const data = await aiApi.getInferences(workspaceId, page, perPage);
             
             setInferences(data.data);
             setInferencesMeta(data.meta || null);
-            setInferencesPage(page);
         } catch (err) {
             console.error('Error loading inferences:', err);
         } finally {
             setInferencesLoading(false);
         }
-    };
+    }, [workspaceId]);
+
+    useEffect(() => {
+        loadWorkspace();
+        loadImages(); // Cargar imágenes siempre al cargar el workspace
+    }, [loadWorkspace, loadImages]);
+
+    // Cargar archivos cuando se entra a la pestaña 'files' y aún no han sido cargados
+    useEffect(() => {
+        if (activeTab !== 'files') return;
+        // Si ya tenemos archivos cargados o estamos en medio de una carga, no hacer nada
+        if (filesLoading) return;
+        if (filesMeta !== null) return; // Previene loops si el workspace tiene 0 archivos
+        if (workspace && workspace.files && workspace.files.length > 0) return;
+
+        // Cargar primera página de archivos
+        loadFiles();
+        // Dependencias estrictas para evitar re-renderizados infinitos con espacios vacíos
+    }, [activeTab, filesLoading, filesMeta, workspace, loadFiles]);
+
+    useEffect(() => {
+        // Recargar imágenes solo cuando se cambia específicamente a la pestaña de imágenes
+        // y no hemos cargado imágenes recientemente
+        if (activeTab === 'images' && images.length === 0 && !imagesLoading) {
+            loadImages();
+        }
+
+        if (activeTab === 'inferences' && inferences.length === 0 && !inferencesLoading) {
+            loadInferences(1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
 
     const handleFileUpload = async (fileData: { file: File; name?: string }) => {
         try {
@@ -233,7 +216,7 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
         if (!selectedFileForEdit) return;
 
         try {
-            const updatedFile = await workspaceApi.updateFile(
+            await workspaceApi.updateFile(
                 workspaceId, 
                 selectedFileForEdit.id, 
                 { name: newName, processing_notes: notes }
@@ -341,7 +324,6 @@ export const WorkspaceDetailView: React.FC<WorkspaceDetailViewProps> = ({
     };
 
     const canEdit = workspace && ['owner', 'editor'].includes(workspace.user_role);
-    const canManage = workspace && workspace.user_role === 'owner';
 
     if (loading) {
         return (

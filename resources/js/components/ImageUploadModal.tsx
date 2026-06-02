@@ -7,7 +7,6 @@ import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { X, Upload, Plus, Trash2 } from 'lucide-react';
-import { UploadImageData } from '@/types/workspace';
 import { useImageUpload } from '@/services/imageApi';
 
 interface ImageUploadModalProps {

@@ -5,7 +5,7 @@ import {
   Upload, Play, Settings, RefreshCw, AlertCircle, CheckCircle,
   FileImage, Database, Activity, Download, FileText, Image as ImageIcon
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
@@ -73,7 +73,7 @@ export default function AIModel({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [threshold, setThreshold] = useState(0.5);
   const [stride, setStride] = useState(256);
-  const [useWaterStress, setUseWaterStress] = useState(true);
+  const [useWaterStress] = useState(true);
   const [selectedWorkspace, setSelectedWorkspace] = useState(
     initialWorkspaceId || (workspaces.length > 0 ? workspaces[0].id : '')
   );
@@ -113,9 +113,7 @@ export default function AIModel({
   const [isUploading, setIsUploading] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadModels();
-  }, []);
+
 
   useEffect(() => {
     if (selectedWorkspace) {
@@ -163,22 +161,34 @@ export default function AIModel({
     }
   };
 
-  const loadModels = async () => {
+  const loadModels = useCallback(async () => {
     try {
       const response = await fetch('/api/ai/models');
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load models');
+      }
+
       if (data.models) {
         setModels(data.models);
-        if (data.models.length > 0 && !selectedModel) {
-          const defaultModel = data.models.find((m: Model) => m.model_id === 'autoencoder_20251109_233412');
-          setSelectedModel(defaultModel ? defaultModel.model_id : data.models[0].model_id);
+        if (data.models.length > 0) {
+          setSelectedModel((prev) => {
+            if (prev) return prev;
+            const defaultModel = data.models.find((m: Model) => m.model_id === 'autoencoder_20251109_233412');
+            return defaultModel ? defaultModel.model_id : data.models[0].model_id;
+          });
         }
       }
     } catch (err) {
       console.error('Error loading models:', err);
-      setError('Failed to load models.');
+      setError(err instanceof Error ? err.message : 'Failed to load models.');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadModels();
+  }, [loadModels]);
 
   // --- Inference Logic ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,8 +237,8 @@ export default function AIModel({
       const jobId = data.job_id;
       pollStatus(jobId);
 
-    } catch (err: any) {
-      setError(err.message || 'Error starting prediction');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error starting prediction');
       setIsProcessing(false);
     }
   };
@@ -280,13 +290,15 @@ export default function AIModel({
       body: formData,
     });
 
-    let data: any;
-    try { data = await res.json(); } catch { data = {}; }
+    let data: { folder?: string; error?: string; message?: string } = {};
+    try { data = await res.json(); } catch {
+      // Ignore if response body is empty or invalid JSON
+    }
 
     if (!res.ok || !data.folder) {
       throw new Error(data.error || data.message || `Error al subir archivos de ${datasetType} al servidor`);
     }
-    return data.folder as string;
+    return data.folder;
   };
 
   const startTraining = async () => {
@@ -349,8 +361,8 @@ export default function AIModel({
       setTrainUploadProgress('');
       pollTrainingStatus(jobId, trainType);
 
-    } catch (err: any) {
-      setError(err.message || 'Error al iniciar entrenamiento');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al iniciar entrenamiento');
       setIsTraining(false);
       setTrainUploadProgress('');
     }
@@ -393,7 +405,9 @@ export default function AIModel({
       setIsTraining(false);
       setTrainStatus(null);
       setActiveTrainJobId(null);
-    } catch { }
+    } catch { 
+      // Intentionally ignored
+    }
   };
 
   // --- Upload Logic ---
@@ -428,8 +442,8 @@ export default function AIModel({
       setUploadDesc('');
       loadModels(); // Refresh list
 
-    } catch (err: any) {
-      setError(err.message || 'Error uploading model');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error uploading model');
     } finally {
       setIsUploading(false);
     }
@@ -867,8 +881,7 @@ export default function AIModel({
                       ? `✅ ${trainImagesFiles.length} archivo(s) seleccionado(s)`
                       : 'Seleccionar carpeta de imágenes desde tu PC'}
                     <input type="file" multiple accept=".tif,.tiff"
-                      // @ts-ignore
-                      webkitdirectory=""
+                      {...{ webkitdirectory: "" }}
                       className="hidden"
                       onChange={e => setTrainImagesFiles(e.target.files)} />
                   </label>
@@ -884,8 +897,7 @@ export default function AIModel({
                         ? `✅ ${trainMasksFiles.length} archivo(s) seleccionado(s)`
                         : 'Seleccionar carpeta de máscaras desde tu PC'}
                       <input type="file" multiple accept=".tif,.tiff"
-                        // @ts-ignore
-                        webkitdirectory=""
+                        {...{ webkitdirectory: "" }}
                         className="hidden"
                         onChange={e => setTrainMasksFiles(e.target.files)} />
                     </label>
@@ -894,16 +906,16 @@ export default function AIModel({
 
                 {/* Numeric params */}
                 <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: 'Epochs', key: 'epochs', min: 1, max: trainType === 'supervised' ? 500 : 200 },
-                    { label: 'Batch Size', key: 'batch_size', min: 1, max: 64 },
+                  {([
+                    { label: 'Epochs', key: 'epochs', min: 1, max: trainType === 'supervised' ? 500 : 200, step: undefined },
+                    { label: 'Batch Size', key: 'batch_size', min: 1, max: 64, step: undefined },
                     { label: 'Patch Size', key: 'patch_size', min: 32, max: 512, step: 32 },
                     { label: 'Stride', key: 'stride', min: 16, max: 512, step: 16 },
-                  ].map(({ label, key, min, max, step }) => (
+                  ] as const).map(({ label, key, min, max, step }) => (
                     <div key={key}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
                       <input type="number" min={min} max={max} step={step || 1}
-                        value={(trainConfig as any)[key]}
+                        value={trainConfig[key]}
                         onChange={e => setTrainConfig({ ...trainConfig, [key]: parseInt(e.target.value) || min })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
                     </div>

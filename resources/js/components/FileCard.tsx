@@ -1,5 +1,4 @@
-import React from 'react';
-import { Download, Trash2, Map, FileText, Calendar, User, Eye, MapPin, Edit3 } from 'lucide-react';
+import { Trash2, Map, FileText, Calendar, User, Eye, MapPin, Edit3 } from 'lucide-react';
 import { WorkspaceFile } from '../types/workspace';
 
 interface FileCardProps {
@@ -15,8 +14,6 @@ interface FileCardProps {
 export const FileCard: React.FC<FileCardProps> = ({
     file,
     canEdit,
-    onDownload,
-    onDownloadWithMeta,
     onDelete,
     onPreviewAreas,
     onEdit
@@ -68,11 +65,11 @@ export const FileCard: React.FC<FileCardProps> = ({
         if (!file.metadata) return false;
         
         const checks = [
-            file.metadata.frontend_data?.selectedAreas?.length > 0,
-            file.metadata.selectedAreas?.length > 0,
-            file.metadata.coordinates?.length > 0,
-            file.metadata.areas?.length > 0,
-            file.metadata.geoJson || file.metadata.geometry || file.metadata.polygon
+            (file.metadata.frontend_data?.selectedAreas?.length ?? 0) > 0,
+            (file.metadata.selectedAreas?.length ?? 0) > 0,
+            (file.metadata.coordinates?.length ?? 0) > 0,
+            (file.metadata.areas?.length ?? 0) > 0,
+            !!(file.metadata.geoJson || file.metadata.geometry || file.metadata.polygon)
         ];
         
         return checks.some(check => check);

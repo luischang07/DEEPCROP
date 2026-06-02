@@ -32,7 +32,10 @@ interface ProcessingState {
     message: string;
 }
 
-export default function ProcesarImagenes({ auth, workspaces }: Props) {
+const ACCEPTED_FILE_TYPES = ['.tif', '.tiff', '.jp2', '.png'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+export default function ProcesarImagenes({ workspaces }: Props) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [selectedWorkspace, setSelectedWorkspace] = useState<string>('');
@@ -46,9 +49,6 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
     const [error, setError] = useState<string>('');
     const [success, setSuccess] = useState<string>('');
     const [useMultipleBands, setUseMultipleBands] = useState(false);
-
-    const acceptedFileTypes = ['.tif', '.tiff', '.jp2', '.png'];
-    const maxFileSize = 50 * 1024 * 1024; // 50MB
 
     // Debug: Log state changes
     React.useEffect(() => {
@@ -67,7 +67,6 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
         });
     }, [selectedFile, selectedFiles, useMultipleBands, selectedWorkspace, selectedIndex, processing.isProcessing]);
 
-    // Debug: Log workspaces on mount
     React.useEffect(() => {
         console.log('Workspaces disponibles:', workspaces);
         if (workspaces && workspaces.length > 0) {
@@ -75,18 +74,18 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
             console.log('Tiene _id?', '_id' in workspaces[0]);
             console.log('Tiene id?', 'id' in workspaces[0]);
         }
-    }, []);
+    }, [workspaces]);
 
-    const validateFile = (file: File): string | null => {
+    const validateFile = useCallback((file: File): string | null => {
         const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-        if (!acceptedFileTypes.includes(extension)) {
-            return `Tipo de archivo no válido. Acepta: ${acceptedFileTypes.join(', ')}`;
+        if (!ACCEPTED_FILE_TYPES.includes(extension)) {
+            return `Tipo de archivo no válido. Acepta: ${ACCEPTED_FILE_TYPES.join(', ')}`;
         }
-        if (file.size > maxFileSize) {
+        if (file.size > MAX_FILE_SIZE) {
             return `El archivo es muy grande. Máximo: 50MB`;
         }
         return null;
-    };
+    }, []);
 
     const handleDrag = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -138,7 +137,7 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
                 setSelectedFile(file);
             }
         }
-    }, [useMultipleBands]);
+    }, [useMultipleBands, validateFile]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setError('');
@@ -211,7 +210,7 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
         
         if (useMultipleBands) {
             // Send multiple files
-            selectedFiles.forEach((file, index) => {
+            selectedFiles.forEach((file) => {
                 formData.append('files[]', file);
             });
             formData.append('image_name', 'combined_bands');
@@ -261,11 +260,20 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
                 router.visit(`/workspaces/${selectedWorkspace}/images`);
             }, 2000);
 
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error processing image:', err);
-            let errorMessage = err.response?.data?.details?.message ||
-                               err.response?.data?.error || 
-                               err.response?.data?.message || 
+            const error = err as {
+                response?: {
+                    data?: {
+                        details?: { message?: string };
+                        error?: string;
+                        message?: string;
+                    };
+                };
+            };
+            let errorMessage = error.response?.data?.details?.message ||
+                               error.response?.data?.error || 
+                               error.response?.data?.message || 
                                'Error al procesar la imagen';
             
             // Add helpful message if it's a band count issue
@@ -339,7 +347,7 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
                                         type="file"
                                         id="file-upload"
                                         className="hidden"
-                                        accept={acceptedFileTypes.join(',')}
+                                        accept={ACCEPTED_FILE_TYPES.join(',')}
                                         onChange={handleFileChange}
                                         disabled={processing.isProcessing}
                                         multiple={useMultipleBands}
@@ -441,7 +449,7 @@ export default function ProcesarImagenes({ auth, workspaces }: Props) {
                                     </SelectTrigger>
                                     <SelectContent>
                                         {(workspaces || []).map((workspace) => {
-                                            const workspaceId = workspace._id || (workspace as any).id;
+                                            const workspaceId = workspace._id || (workspace as Workspace & { id?: string }).id || '';
                                             return (
                                                 <SelectItem key={workspaceId} value={workspaceId}>
                                                     {workspace.name}

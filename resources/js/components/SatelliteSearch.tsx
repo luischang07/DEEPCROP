@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { router } from '@inertiajs/react';
 
 interface Coordinates {
     lat: number;

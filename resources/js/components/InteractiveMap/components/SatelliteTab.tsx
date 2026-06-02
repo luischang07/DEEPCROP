@@ -118,7 +118,9 @@ export const SatelliteTab: React.FC<SatelliteTabProps> = ({
                                             onClick={() => {
                                                 const select = document.getElementById(`bundle-${image.id}`) as HTMLSelectElement;
                                                 const bundle = select.value;
-                                                onOrderImage && onOrderImage({ ...image, bundle });
+                                                if (onOrderImage) {
+                                                    onOrderImage({ ...image, bundle });
+                                                }
                                             }}
                                             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                                         >

@@ -17,6 +17,37 @@ export interface Workspace {
     updated_at: string;
 }
 
+export interface FileMetadata {
+    frontend_data?: {
+        selectedAreas?: Array<{
+            type: 'polygon' | 'rectangle' | 'circle' | 'marker';
+            coordinates: number[][];
+            area?: number;
+        }>;
+        description?: string;
+        mapCenter?: { lat: number; lng: number } | [number, number];
+        mapZoom?: number;
+        totalArea?: number;
+    };
+    selectedAreas?: Array<{
+        type: 'polygon' | 'rectangle' | 'circle' | 'marker';
+        coordinates: number[][];
+        area?: number;
+    }>;
+    coordinates?: number[][];
+    areas?: Array<{
+        type: 'polygon' | 'rectangle' | 'circle' | 'marker';
+        coordinates: number[][];
+        area?: number;
+    }>;
+    totalArea?: number;
+    area?: number;
+    geoJson?: unknown;
+    geometry?: unknown;
+    polygon?: unknown;
+    [key: string]: unknown;
+}
+
 export interface WorkspaceFile {
     id: number;
     name: string;
@@ -32,7 +63,7 @@ export interface WorkspaceFile {
     };
     is_processed: boolean;
     processing_notes?: string;
-    metadata?: any;
+    metadata?: FileMetadata;
     uploaded_by: User;
     created_at: string;
     updated_at: string;
@@ -48,7 +79,7 @@ export interface WorkspaceImage {
     file_size: number;
     formatted_size: string;
     mime_type: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     geospatial_bounds?: number[];
     center_lat?: number;
     center_lng?: number;

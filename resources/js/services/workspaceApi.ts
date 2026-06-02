@@ -59,7 +59,7 @@ export const workspaceApi = {
     // Archivos
     getFiles: async (workspaceId: string, opts?: { page?: number; per_page?: number; has_coordinates?: boolean; include?: string[] }):
         Promise<{ files: WorkspaceFile[]; meta: { current_page: number; per_page: number; total: number; last_page: number } }> => {
-        const params: any = {};
+        const params: Record<string, string | number | boolean> = {};
         if (opts?.page) params.page = opts.page;
         if (opts?.per_page) params.per_page = opts.per_page;
         if (opts?.has_coordinates) params.has_coordinates = true;
@@ -70,6 +70,7 @@ export const workspaceApi = {
         return response.data.data;
     },
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     uploadFile: async (workspaceId: string, data: UploadFileData, onUploadProgress?: (progressEvent: any) => void): Promise<WorkspaceFile> => {
         const formData = new FormData();
         formData.append('file', data.file);
@@ -116,7 +117,7 @@ export const workspaceApi = {
                 const payload = JSON.parse(text);
                 const message = payload.message || (payload.data && payload.data.message) || 'Error desconocido al descargar el archivo';
                 throw new Error(message);
-            } catch (e) {
+            } catch {
                 // if parsing fails, throw generic error with text
                 throw new Error(text || 'Error al descargar archivo');
             }
@@ -131,7 +132,7 @@ export const workspaceApi = {
         if (filenameStarMatch) {
             try {
                 filename = decodeURIComponent(filenameStarMatch[1].replace(/"/g, ''));
-            } catch (e) {
+            } catch {
                 filename = filenameStarMatch[1].replace(/"/g, '');
             }
         } else {

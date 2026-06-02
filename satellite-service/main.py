@@ -557,7 +557,7 @@ async def convert_image(
         try:
             # Abrir imagen con PIL
             with Image.open(io.BytesIO(content)) as img:
-                logger.info(f"Imagen cargada: {img.size}, modo: {img.mode}")
+                logger.info(f"Imagen cargada con PIL: {img.size}, modo: {img.mode}")
                 
                 # Convertir a RGB si es necesario (para JPEG)
                 if output_format.upper() == "JPEG" and img.mode in ("RGBA", "P", "L"):
@@ -601,7 +601,7 @@ async def convert_image(
                 base_name = os.path.splitext(file.filename)[0]
                 output_filename = f"{base_name}_preview.{extension}"
                 
-                logger.info(f"Conversión exitosa: {output_filename}")
+                logger.info(f"Conversión exitosa con PIL: {output_filename}")
                 
                 return StreamingResponse(
                     io.BytesIO(output_buffer.read()),
@@ -613,17 +613,117 @@ async def convert_image(
                 )
                 
         except Exception as pil_error:
-            logger.error(f"Error al convertir con PIL: {str(pil_error)}")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"No se pudo convertir la imagen TIFF: {str(pil_error)}"
-            )
-        
+            logger.error(f"Error al convertir con PIL: {str(pil_error)}. Intentando con tifffile...")
+            try:
+                import tifffile
+                with tifffile.TiffFile(io.BytesIO(content)) as tif:
+                    img_array = tif.asarray()
+                
+                logger.info(f"Imagen cargada con tifffile, shape: {img_array.shape}, dtype: {img_array.dtype}")
+                
+                # Manejar dimensiones
+                if img_array.ndim == 3:
+                    # Formato habitual (bands, height, width). Transponer si bands es el primer eje
+                    if img_array.shape[0] < img_array.shape[1] and img_array.shape[0] < img_array.shape[2]:
+                        img_array = np.transpose(img_array, (1, 2, 0))
+                    
+                    bands_count = img_array.shape[2]
+                    if bands_count >= 3:
+                        # Extraer las primeras 3 bandas para RGB (típicamente R, G, B)
+                        rgb_array = img_array[:, :, :3]
+                    elif bands_count == 2:
+                        rgb_array = np.zeros((img_array.shape[0], img_array.shape[1], 3), dtype=img_array.dtype)
+                        rgb_array[:, :, 0] = img_array[:, :, 0]
+                        rgb_array[:, :, 1] = img_array[:, :, 1]
+                    else:
+                        rgb_array = np.repeat(img_array[:, :, :1], 3, axis=2)
+                elif img_array.ndim == 2:
+                    rgb_array = np.repeat(img_array[:, :, np.newaxis], 3, axis=2)
+                else:
+                    raise Exception(f"Número de dimensiones no soportado: {img_array.ndim}")
+                
+                # Normalizar a uint8
+                rgb_array = rgb_array.astype(np.float32)
+                rgb_array = np.nan_to_num(rgb_array, nan=0.0, posinf=0.0, neginf=0.0)
+                
+                h, w, c = rgb_array.shape
+                step_h = max(1, h // 100)
+                step_w = max(1, w // 100)
+                sub_sample = rgb_array[::step_h, ::step_w, :]
+                
+                p2, p98 = np.percentile(sub_sample, (2, 98))
+                if p98 > p2:
+                    rgb_array = np.clip(rgb_array, p2, p98)
+                    rgb_array = (rgb_array - p2) / (p98 - p2) * 255.0
+                else:
+                    vmin = rgb_array.min()
+                    vmax = rgb_array.max()
+                    if vmax > vmin:
+                        rgb_array = (rgb_array - vmin) / (vmax - vmin) * 255.0
+                    else:
+                        rgb_array = np.zeros_like(rgb_array)
+                
+                rgb_array = rgb_array.astype(np.uint8)
+                
+                # Crear imagen PIL
+                img = Image.fromarray(rgb_array, mode="RGB")
+                
+                # Redimensionar si se especifica
+                if max_width or max_height:
+                    original_width, original_height = img.size
+                    
+                    if max_width and max_height:
+                        ratio = min(max_width / original_width, max_height / original_height)
+                    elif max_width:
+                        ratio = max_width / original_width
+                    else:
+                        ratio = max_height / original_height
+                    
+                    new_width = int(original_width * ratio)
+                    new_height = int(original_height * ratio)
+                    
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    logger.info(f"Imagen de tifffile redimensionada a: {new_width}x{new_height}")
+                
+                # Guardar en memoria
+                output_buffer = io.BytesIO()
+                
+                if output_format.upper() == "JPEG":
+                    img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
+                    media_type = "image/jpeg"
+                    extension = "jpg"
+                else:
+                    img.save(output_buffer, format="PNG", optimize=True)
+                    media_type = "image/png"
+                    extension = "png"
+                
+                output_buffer.seek(0)
+                
+                base_name = os.path.splitext(file.filename)[0]
+                output_filename = f"{base_name}_preview.{extension}"
+                
+                logger.info(f"Conversión exitosa con tifffile: {output_filename}")
+                
+                return StreamingResponse(
+                    io.BytesIO(output_buffer.read()),
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={output_filename}",
+                        "X-Conversion-Status": "success"
+                    }
+                )
+            except Exception as tif_error:
+                logger.error(f"Error al convertir con tifffile: {str(tif_error)}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"No se pudo convertir la imagen TIFF ni con PIL ni con tifffile. Error PIL: {str(pil_error)}. Error tifffile: {str(tif_error)}"
+                )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error general en conversión: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

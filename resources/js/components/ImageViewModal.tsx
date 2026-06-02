@@ -26,7 +26,6 @@ import {
 } from '@mui/icons-material';
 import { WorkspaceImage } from '@/types/workspace';
 import { imageApi } from '@/services/imageApi';
-import { workspaceApi } from '@/services/workspaceApi';
 
 interface ImageViewModalProps {
     workspaceId: string;

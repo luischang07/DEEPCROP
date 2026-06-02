@@ -373,7 +373,7 @@ const extractTIFFMetadata = (view: DataView, decoder: TextDecoder): { lat: numbe
         const patterns = [
             /DEEPCROP_META[:\0]([^"]*)/,
             /DEEPCROP_TIFF_META:([^"\n]*)/,
-            /ImageDescription[^\{]*(\{[^}]*\})/,
+            /ImageDescription[^{]*({[^}]*})/,
             /"coordinates":\[\[([^\]]+)\]\]/,
             /\{"coordinates":\[\[.*?\]\].*?\}/s
         ];
@@ -388,6 +388,7 @@ const extractTIFFMetadata = (view: DataView, decoder: TextDecoder): { lat: numbe
                     }
                     
                     // Limpiar caracteres de control
+                    // eslint-disable-next-line no-control-regex
                     metadataStr = metadataStr.replace(/[\x00-\x1F\x7F]/g, '');
                     
                     const metadata = JSON.parse(metadataStr);

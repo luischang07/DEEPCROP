@@ -22,8 +22,8 @@ export const PlanetOrdersList: React.FC = () => {
             if (!response.ok) throw new Error('Error al obtener pedidos');
             const data = await response.json();
             setOrders(data);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Error desconocido');
         } finally {
             setLoading(false);
         }
@@ -36,9 +36,9 @@ export const PlanetOrdersList: React.FC = () => {
             
             // Refrescar toda la lista después de actualizar una 
             await fetchOrders();
-        } catch (e: any) {
+        } catch (e) {
             console.error('Error verificando estado:', e);
-            alert('Error al verificar: ' + e.message);
+            alert('Error al verificar: ' + (e instanceof Error ? e.message : 'Error desconocido'));
         }
     };
 

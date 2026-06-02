@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Calendar, Settings, Trash2, FileText, Crown, Edit, Eye } from 'lucide-react';
+import { Users, Calendar, Trash2, FileText, Crown, Edit, Eye } from 'lucide-react';
 import { Workspace } from '../types/workspace';
 
 interface WorkspaceCardProps {

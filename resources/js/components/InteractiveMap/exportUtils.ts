@@ -5,7 +5,10 @@ import { SelectedArea } from './types';
  */
 export const convertToGeoJSON = (selectedAreas: SelectedArea[]) => {
     const features = selectedAreas.map((area, index) => {
-        let geometry: any;
+        let geometry: {
+            type: string;
+            coordinates: number[] | number[][] | number[][][];
+        };
 
         switch (area.type) {
             case 'polygon':
@@ -15,12 +18,12 @@ export const convertToGeoJSON = (selectedAreas: SelectedArea[]) => {
                     coordinates: [area.coordinates.map(coord => [coord[1], coord[0]])]
                 };
                 break;
-            case 'circle':
+            case 'circle': {
                 // Para círculos, convertir a polígono aproximado
                 const center = area.coordinates[0];
                 const numPoints = 32;
                 const radius = Math.sqrt(area.area! / Math.PI) / 111000; // Aproximación de metros a grados
-                const circleCoords = [];
+                const circleCoords: number[][] = [];
                 for (let i = 0; i < numPoints; i++) {
                     const angle = (i / numPoints) * 2 * Math.PI;
                     const lat = center[0] + radius * Math.cos(angle);
@@ -33,6 +36,7 @@ export const convertToGeoJSON = (selectedAreas: SelectedArea[]) => {
                     coordinates: [circleCoords]
                 };
                 break;
+            }
             case 'marker':
                 geometry = {
                     type: 'Point',
@@ -130,7 +134,7 @@ export const convertToKML = (selectedAreas: SelectedArea[]) => {
         let geometry = '';
         switch (area.type) {
             case 'polygon':
-            case 'rectangle':
+            case 'rectangle': {
                 const coords = area.coordinates.map(coord => `${coord[1]},${coord[0]},0`).join(' ');
                 geometry = `
                 <Polygon>
@@ -143,7 +147,8 @@ export const convertToKML = (selectedAreas: SelectedArea[]) => {
                     </outerBoundaryIs>
                 </Polygon>`;
                 break;
-            case 'circle':
+            }
+            case 'circle': {
                 // Para círculos, crear un polígono aproximado
                 const center = area.coordinates[0];
                 const numPoints = 32;
@@ -166,6 +171,7 @@ export const convertToKML = (selectedAreas: SelectedArea[]) => {
                     </outerBoundaryIs>
                 </Polygon>`;
                 break;
+            }
             case 'marker':
                 geometry = `
                 <Point>

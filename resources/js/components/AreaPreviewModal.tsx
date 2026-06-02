@@ -15,7 +15,7 @@ interface AreaPreviewModalProps {
     areas: SelectedArea[];
     title: string;
     description?: string;
-    mapCenter?: { lat: number; lng: number };
+    mapCenter?: { lat: number; lng: number } | [number, number];
     mapZoom?: number;
 }
 

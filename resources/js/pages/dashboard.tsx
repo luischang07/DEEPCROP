@@ -2,7 +2,6 @@ import AppLayout from '@/layouts/app-layout';
 import InteractiveMap from '@/components/InteractiveMap';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -12,9 +11,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Dashboard() {
-    const [selectedAreas, setSelectedAreas] = useState<any[]>([]);
-
-    const handleAreaSelected = (area: any) => {
+    const handleAreaSelected = (area: unknown) => {
         console.log('Área seleccionada:', area);
     };
 

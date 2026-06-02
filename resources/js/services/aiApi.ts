@@ -16,8 +16,15 @@ export interface InferenceJob {
     error_message?: string;
 }
 
+export interface PaginationMeta {
+    current_page: number;
+    per_page: number;
+    total: number;
+    last_page: number;
+}
+
 export const aiApi = {
-    getInferences: async (workspaceId: string, page: number = 1, perPage: number = 10): Promise<{ data: InferenceJob[], meta: any }> => {
+    getInferences: async (workspaceId: string, page: number = 1, perPage: number = 10): Promise<{ data: InferenceJob[], meta: PaginationMeta }> => {
         const response = await axios.get(`${API_BASE}/inferences`, {
             params: { 
                 workspace_id: workspaceId,

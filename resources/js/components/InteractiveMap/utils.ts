@@ -1,4 +1,3 @@
-import { SelectedArea } from './types';
 
 // Función para calcular el área de un polígono en metros cuadrados
 export const calculateArea = (coordinates: number[][]): number => {

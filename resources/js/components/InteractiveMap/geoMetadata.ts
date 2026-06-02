@@ -75,10 +75,6 @@ export const extractGeoTIFFMetadata = (arrayBuffer: ArrayBuffer): GeoMetadata | 
                 view.getUint16(entryOffset, true) : 
                 view.getUint16(entryOffset, false);
             
-            const type = isLittleEndian ? 
-                view.getUint16(entryOffset + 2, true) : 
-                view.getUint16(entryOffset + 2, false);
-            
             const count = isLittleEndian ? 
                 view.getUint32(entryOffset + 4, true) : 
                 view.getUint32(entryOffset + 4, false);
@@ -90,7 +86,7 @@ export const extractGeoTIFFMetadata = (arrayBuffer: ArrayBuffer): GeoMetadata | 
                     metadata.dataType = 'raster';
                     break;
                     
-                case 270: // ImageDescription
+                case 270: { // ImageDescription
                     const description = readString(view, valueOffset, count, isLittleEndian);
                     console.log('ImageDescription:', description);
                     
@@ -108,8 +104,9 @@ export const extractGeoTIFFMetadata = (arrayBuffer: ArrayBuffer): GeoMetadata | 
                         }
                     }
                     break;
+                }
                     
-                case 33550: // ModelPixelScaleTag (GeoTIFF)
+                case 33550: { // ModelPixelScaleTag (GeoTIFF)
                     console.log('GeoTIFF ModelPixelScaleTag encontrado');
                     const pixelScale = readDoubleArray(view, valueOffset, count, isLittleEndian);
                     if (pixelScale.length >= 2) {
@@ -117,8 +114,9 @@ export const extractGeoTIFFMetadata = (arrayBuffer: ArrayBuffer): GeoMetadata | 
                         console.log('Pixel size:', metadata.pixelSize);
                     }
                     break;
+                }
                     
-                case 33922: // ModelTiepointTag (GeoTIFF)
+                case 33922: { // ModelTiepointTag (GeoTIFF)
                     console.log('GeoTIFF ModelTiepointTag encontrado');
                     const tiepoints = readDoubleArray(view, valueOffset, count, isLittleEndian);
                     if (tiepoints.length >= 6) {
@@ -142,6 +140,7 @@ export const extractGeoTIFFMetadata = (arrayBuffer: ArrayBuffer): GeoMetadata | 
                         }
                     }
                     break;
+                }
                     
                 case 34735: // GeoKeyDirectoryTag
                     console.log('GeoTIFF GeoKeys encontrados');
@@ -229,7 +228,7 @@ export const extractSentinel2Metadata = (arrayBuffer: ArrayBuffer, filename: str
             console.log('Tile Sentinel-2 detectado:', { zone, latBand, square });
             
             // Convertir coordenadas de tile a lat/lng (simplificado)
-            const { lat, lng } = convertSentinelTileToGeo(zone, latBand, square);
+            const { lat, lng } = convertSentinelTileToGeo(zone, latBand);
             
             return {
                 lat,
@@ -353,7 +352,7 @@ function convertProjectedToGeo(x: number, y: number): { lat: number; lng: number
     return { lat: y, lng: x };
 }
 
-function convertSentinelTileToGeo(zone: number, latBand: string, square: string): { lat: number; lng: number } {
+function convertSentinelTileToGeo(zone: number, latBand: string): { lat: number; lng: number } {
     // Conversión simplificada de tiles Sentinel-2 a coordenadas geográficas
     // Basándose en la grilla UTM/MGRS
     

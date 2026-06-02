@@ -195,9 +195,10 @@ export const useImageUpload = () => {
             setIsUploading(false);
             setUploadProgress(100);
             return response.data.data;
-        } catch (err: any) {
+        } catch (err) {
+            const error = err as { response?: { data?: { message?: string } } };
             setIsUploading(false);
-            setError(err.response?.data?.message || 'Error al subir la imagen');
+            setError(error.response?.data?.message || 'Error al subir la imagen');
             return null;
         }
     };

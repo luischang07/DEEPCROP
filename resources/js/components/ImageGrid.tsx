@@ -6,7 +6,6 @@ import {
     Button,
     Card,
     CardContent,
-    CardHeader,
     Typography,
     IconButton,
     Menu,
@@ -20,12 +19,10 @@ import {
     OutlinedInput,
     Checkbox,
     CircularProgress,
-    Alert,
     Paper
 } from '@mui/material';
 import { 
     Search as SearchIcon,
-    FilterList as FilterIcon,
     Download as DownloadIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
@@ -34,10 +31,9 @@ import {
     LocationOn as LocationIcon,
     CalendarToday as CalendarIcon,
     Image as ImageIcon,
-    EditNote as EditNoteIcon,
     Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { WorkspaceImage, ImageFilters } from '@/types/workspace';
+import { WorkspaceImage } from '@/types/workspace';
 import { imageApi } from '@/services/imageApi';
 import { imageCacheService } from '@/services/imageCacheService';
 
@@ -51,7 +47,7 @@ const ImageWithRetry: React.FC<{
     thumbUrl?: string | null;
 }> = ({ workspaceId, imageId, alt, onImageSelect, fallbackInfo, thumbUrl = null }) => {
     const [loadError, setLoadError] = useState(false);
-    const [retryCount, setRetryCount] = useState(() => 
+    const [, setRetryCount] = useState(() => 
         imageCacheService.getRetryCount(imageId, workspaceId)
     );
     const [isLoading, setIsLoading] = useState(true);
@@ -213,9 +209,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
     images,
     onImageSelect,
     onImageEdit,
-    onImageRename,
-    onImageDelete,
-    onRefresh
+    onImageDelete
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
